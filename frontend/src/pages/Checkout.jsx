@@ -241,8 +241,7 @@ const handlePlaceOrder = async (e) => {
 
     if (response.ok) {
       if (clearCart) clearCart();
-      const createdOrderId = response.data.id;
-      const createdOrderId = data.order_id || data.orderId || data.order?.id;
+      const createdOrderId = data.order_id || data.orderId || data.order?.id || response.data.id;
       navigate(`/order-tracking/${createdOrderId}`);
     } else {
       alert(data.message || 'Failed to place order.');
