@@ -92,9 +92,7 @@ const normalizedData = {
   useEffect(() => {
     if (!orderId) return;
 
-// REPLACE: const socket = io('http://localhost:5000', { transports: ['websocket'] });
-const socket = io(API_BASE, { transports: ['websocket'] });
-    });
+    const socket = io(API_BASE, { transports: ['websocket'] });
     socketRef.current = socket;
 
     socket.on('connect', () => {
