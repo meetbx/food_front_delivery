@@ -106,7 +106,9 @@ useEffect(() => {
     }
 
     const queryString = params.toString();
-    const fullUrl = queryString ? `${url}?${queryString}` : url;
+    const baseUrl = `${API_BASE}${endpoint}`;
+    const fullUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;
+
 
     fetch(fullUrl)
       .then((res) => res.json())
