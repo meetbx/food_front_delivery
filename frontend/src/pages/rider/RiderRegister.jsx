@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useRiderAuth } from '../../context/RiderAuthContext';
-import { apiFetch } from '../config'; // Import apiFetch
+import { apiFetch } from '../../config'; // Import apiFetch
 
 export default function RiderRegister() {
   const navigate = useNavigate();
