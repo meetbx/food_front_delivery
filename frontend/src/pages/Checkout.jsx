@@ -241,11 +241,16 @@ const handlePlaceOrder = async (e) => {
 
     if (response.ok) {
       if (clearCart) clearCart();
-      const createdOrderId = data.order_id || data.orderId || data.order?.id || response.data.id;
-      navigate(`/order-tracking/${createdOrderId}`);
+      const createdOrderId = data.order_id || data.orderId || data.order?.id;
+      if (createdOrderId) {
+        navigate(`/order-tracking/${createdOrderId}`);
+      } else {
+        alert('Order created, but could not retrieve order ID.');
+      }
     } else {
       alert(data.message || 'Failed to place order.');
     }
+  
   } catch (error) {
     console.error('Order error:', error);
     alert('Error connecting to backend server.');
