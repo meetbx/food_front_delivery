@@ -13,6 +13,7 @@ export default function OrderTracking() {
   const [error, setError] = useState(null);
   const [isFullMapOpen, setIsFullMapOpen] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   const miniMapRef = useRef(null);
   const fullMapRef = useRef(null);
@@ -120,6 +121,33 @@ export default function OrderTracking() {
       if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
     };
   }, [id]);
+
+  const handlePayment = async () => {
+    try {
+      setIsProcessingPayment(true);
+
+      const res = await fetch(`${API_BASE}/api/orders/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'Paid',
+          payment_status: 'Completed',
+        }),
+      });
+
+      if (res.ok) {
+        alert('Payment successful!');
+        fetchOrderDetails();
+      } else {
+        alert('Payment failed. Please try again.');
+      }
+    } catch (err) {
+      console.error('Payment Error:', err);
+      alert('An error occurred during payment.');
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
 
   const createMap = (containerRef, isFull = false) => {
     if (!containerRef.current || !order || !window.google) return null;
@@ -293,6 +321,8 @@ export default function OrderTracking() {
   if (loading) return <div className="min-h-screen bg-[#0f0f11] flex items-center justify-center text-gray-400 text-sm">Loading Order...</div>;
   if (error || !order) return <div className="min-h-screen bg-[#0f0f11] flex items-center justify-center text-red-500">Order #{id} not found</div>;
 
+  const isPaid = order?.payment_status === 'Completed' || order?.payment_status === 'Paid';
+
   return (
     <div className="min-h-screen bg-[#0f0f11] text-white p-4 max-w-md mx-auto space-y-3 font-sans pb-10">
       <style>{`
@@ -354,9 +384,9 @@ export default function OrderTracking() {
           className="mini-map-container relative w-32 h-24 bg-gray-900 rounded-2xl overflow-hidden cursor-pointer border border-zinc-700 shadow-inner group"
         >
           <div ref={miniMapRef} className="w-full h-full pointer-events-none" />
-<button className="absolute top-1.5 right-1.5 bg-black/80 text-white p-1 rounded-md z-10 flex items-center justify-center">
-  <img src="/maximize.png" alt="Expand" className="w-3.5 h-3.5 invert" />
-</button>
+          <button className="absolute top-1.5 right-1.5 bg-black/80 text-white p-1 rounded-md z-10 flex items-center justify-center">
+            <img src="/maximize.png" alt="Expand" className="w-3.5 h-3.5 invert" />
+          </button>
         </div>
       </div>
 
@@ -374,10 +404,20 @@ export default function OrderTracking() {
       {/* Payment Action Bar */}
       <div className="bg-[#18181b] p-4 rounded-3xl space-y-3.5 border border-zinc-800">
         <p className="text-xs text-gray-300">
-          Your payment is pending. Pay now for a smoother delivery experience.
+          {isPaid 
+            ? 'Your payment has been successfully completed.' 
+            : 'Your payment is pending. Pay now for a smoother delivery experience.'}
         </p>
-        <button className="w-full bg-[#10b981] hover:bg-emerald-600 text-white font-bold text-sm py-3 rounded-full transition-all shadow-lg">
-          Pay ₹{order.final_total || order.total_amount || 215} now
+        <button 
+          onClick={handlePayment}
+          disabled={isProcessingPayment || isPaid}
+          className="w-full bg-[#10b981] hover:bg-emerald-600 disabled:opacity-60 text-white font-bold text-sm py-3 rounded-full transition-all shadow-lg"
+        >
+          {isPaid 
+            ? 'Payment Completed ✓' 
+            : isProcessingPayment 
+              ? 'Processing Payment...' 
+              : `Pay ₹${order.final_total || order.total_amount || 215} now`}
         </button>
       </div>
 
@@ -406,7 +446,7 @@ export default function OrderTracking() {
           {/* Delivery Address */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-gray-400 text-lg"><img src="/home.png" alt="Phone" className="w-4 h-4 opacity-70" /></span>
+              <span className="text-gray-400 text-lg"><img src="/home.png" alt="Address" className="w-4 h-4 opacity-70" /></span>
               <div>
                 <p className="font-bold text-white text-xs">Delivery at Home</p>
                 <p className="text-[11px] text-gray-400 max-w-[200px] leading-tight mt-0.5">{order.customer.address}</p>
@@ -420,7 +460,7 @@ export default function OrderTracking() {
           {/* Add Instructions */}
           <div className="flex items-center justify-between cursor-pointer">
             <div className="flex items-center gap-3">
-              <span className="text-gray-400 text-lg"><img src="/icons8-scooter-50.png" alt="Phone" className="w-4 h-4 opacity-70" /></span>
+              <span className="text-gray-400 text-lg"><img src="/icons8-scooter-50.png" alt="Instructions" className="w-4 h-4 opacity-70" /></span>
               <span className="font-semibold text-white">Add delivery instructions</span>
             </div>
             <span className="text-gray-400">›</span>
@@ -453,7 +493,7 @@ export default function OrderTracking() {
 
         {/* Order Details header */}
         <div className="flex items-center gap-2 text-xs text-gray-300 font-medium">
-          <span><img src="/icons8-bill-48.png" alt="Phone" className="w-4 h-4 opacity-70" /></span>
+          <span><img src="/icons8-bill-48.png" alt="Bill" className="w-4 h-4 opacity-70" /></span>
           <span>Order #{order.id}</span>
         </div>
 
@@ -487,7 +527,7 @@ export default function OrderTracking() {
         {/* Add cooking requests */}
         <div className="flex items-center justify-between text-xs cursor-pointer pt-1">
           <div className="flex items-center gap-2.5 text-gray-300">
-            <span className="text-base"> <img src="/icons8-cooking-32.png" alt="Phone" className="w-4 h-4 opacity-70" /></span>
+            <span className="text-base"><img src="/icons8-cooking-32.png" alt="Cooking" className="w-4 h-4 opacity-70" /></span>
             <span className="font-medium">Add cooking requests</span>
           </div>
           <span className="text-gray-400">›</span>
@@ -497,10 +537,9 @@ export default function OrderTracking() {
       {/* Need Help Card */}
       <div className="bg-[#18181b] p-4 rounded-3xl flex items-center justify-between border border-zinc-800 text-xs cursor-pointer">
         <div className="flex items-center gap-3">
-          
-           <span className="text-gray-400 text-lg">
-            <img src="/icons8-helpdesk-50.png" alt="Phone" className="w-4 h-4 opacity-70" /></span>
-          
+          <span className="text-gray-400 text-lg">
+            <img src="/icons8-helpdesk-50.png" alt="Help" className="w-4 h-4 opacity-70" />
+          </span>
           <div>
             <p className="font-bold text-white">Need help with your order?</p>
             <p className="text-[11px] text-gray-400">Get help & support</p>
