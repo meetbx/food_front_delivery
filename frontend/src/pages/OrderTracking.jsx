@@ -6,7 +6,8 @@ import { API_BASE } from '../config';
 const lerp = (start, end, t) => start + (end - start) * t;
 
 export default function OrderTracking() {
-  const { id } = useParams();
+  const params = useParams();
+  const id = params.id || params.orderId;
 
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
