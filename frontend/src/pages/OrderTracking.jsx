@@ -123,32 +123,38 @@ export default function OrderTracking() {
     };
   }, [id]);
 
-  const handlePayment = async () => {
-    try {
-      setIsProcessingPayment(true);
+// 1. Add payment handler inside OrderTracking component
+const [isPaying, setIsPaying] = useState(false);
 
-      const res = await fetch(`${API_BASE}/api/orders/${orderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'Paid',
-          payment_status: 'Completed',
-        }),
-      });
+const handlePayment = async () => {
+  setIsPaying(true);
+  try {
+    const res = await fetch(`${API_BASE}/api/orders/${id}`, {
+      method: 'PATCH', // or POST depending on your backend endpoint logic
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payment_status: 'Paid' }),
+    });
 
-      if (res.ok) {
-        alert('Payment successful!');
-        fetchOrderDetails();
-      } else {
-        alert('Payment failed. Please try again.');
-      }
-    } catch (err) {
-      console.error('Payment Error:', err);
-      alert('An error occurred during payment.');
-    } finally {
-      setIsProcessingPayment(false);
+    if (res.ok) {
+      const updatedOrder = await res.json();
+      setOrder((prev) => ({
+        ...prev,
+        payment_status: 'Paid',
+      }));
+      alert('Payment completed successfully!');
+    } else {
+      alert('Failed to process payment. Please try again.');
     }
-  };
+  } catch (err) {
+    console.error('Payment Error:', err);
+    alert('Error connecting to backend payment server.');
+  } finally {
+    setIsPaying(false);
+  }
+};
+
+// 2. Update the JSX section:
+
 
   const createMap = (containerRef, isFull = false) => {
     if (!containerRef.current || !order || !window.google) return null;
@@ -403,24 +409,20 @@ export default function OrderTracking() {
       </div>
 
       {/* Payment Action Bar */}
-      <div className="bg-[#18181b] p-4 rounded-3xl space-y-3.5 border border-zinc-800">
-        <p className="text-xs text-gray-300">
-          {isPaid 
-            ? 'Your payment has been successfully completed.' 
-            : 'Your payment is pending. Pay now for a smoother delivery experience.'}
-        </p>
-        <button 
-          onClick={handlePayment}
-          disabled={isProcessingPayment || isPaid}
-          className="w-full bg-[#10b981] hover:bg-emerald-600 disabled:opacity-60 text-white font-bold text-sm py-3 rounded-full transition-all shadow-lg"
-        >
-          {isPaid 
-            ? 'Payment Completed ✓' 
-            : isProcessingPayment 
-              ? 'Processing Payment...' 
-              : `Pay ₹${order.final_total || order.total_amount || 215} now`}
-        </button>
-      </div>
+{order.payment_status !== 'Paid' && (
+  <div className="bg-[#18181b] p-4 rounded-3xl space-y-3.5 border border-zinc-800">
+    <p className="text-xs text-gray-300">
+      Your payment is pending. Pay now for a smoother delivery experience.
+    </p>
+    <button 
+      onClick={handlePayment}
+      disabled={isPaying}
+      className="w-full bg-[#10b981] hover:bg-emerald-600 text-white font-bold text-sm py-3 rounded-full transition-all shadow-lg disabled:opacity-50"
+    >
+      {isPaying ? 'Processing Payment...' : `Pay ₹${order.final_total || order.total_amount || 215} now`}
+    </button>
+  </div>
+)}
 
       {/* All Delivery Details Card */}
       <div className="bg-[#18181b] rounded-3xl overflow-hidden border border-zinc-800 text-xs space-y-3">
