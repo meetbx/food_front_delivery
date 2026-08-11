@@ -126,7 +126,7 @@ export default function OrderTracking() {
     try {
       setIsProcessingPayment(true);
 
-      const res = await fetch(`${API_BASE}/api/orders/${id}/status`, {
+      const res = await fetch(`${API_BASE}/api/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
