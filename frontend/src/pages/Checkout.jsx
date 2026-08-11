@@ -45,13 +45,14 @@ export default function Checkout() {
     ? cart.items
     : [];
 
+  // FIX: Removed default fallback 1
   const activeRestaurantId =
     currentRestaurant?.id ||
     cartList[0]?.restaurant?.id ||
     cartList[0]?.restaurant_id ||
-    1;
+    cartList[0]?.item?.restaurant_id ||
+    null;
 
-  // Helper function to safely extract formatted address without 'undefined'
   const getFormattedAddress = (addrObj) => {
     if (!addrObj) return '';
     if (typeof addrObj === 'string') return addrObj;
@@ -74,7 +75,6 @@ export default function Checkout() {
     return parts.join(', ');
   };
 
-  // 1. Fetch saved addresses from backend
   useEffect(() => {
     if (token) {
       fetchSavedAddresses();
@@ -109,7 +109,6 @@ export default function Checkout() {
     const formattedText = getFormattedAddress(addrObj);
     setAddress(formattedText);
 
-    // Support all latitude/longitude property variants
     const rawLat = addrObj.latitude ?? addrObj.lat ?? addrObj.location?.lat ?? null;
     const rawLng = addrObj.longitude ?? addrObj.lng ?? addrObj.location?.lng ?? null;
 
@@ -122,7 +121,6 @@ export default function Checkout() {
     });
   };
 
-  // Sync active address fallback from Location Context
   useEffect(() => {
     if (!selectedAddressId && activeAddress && !address) {
       const formatted = getFormattedAddress(activeAddress);
@@ -136,10 +134,9 @@ export default function Checkout() {
     }
   }, [activeAddress, selectedAddressId]);
 
-  // ⚡ AUTOMATICALLY RECALCULATE ETA WHEN ADDRESS / COORDINATES CHANGE
+  // FIX: Recalculate ETA safely
   useEffect(() => {
     const fetchUpdatedEta = async () => {
-      // If coordinates or restaurant aren't available, keep current fallback
       if (!deliveryCoords.lat || !deliveryCoords.lng || !activeRestaurantId) {
         return;
       }
@@ -148,7 +145,6 @@ export default function Checkout() {
 
       try {
         const response = await apiFetch(`/api/restaurants/${activeRestaurantId}?lat=${deliveryCoords.lat}&lng=${deliveryCoords.lng}`);
-
 
         if (response.ok) {
           const data = await response.json();
@@ -171,7 +167,6 @@ export default function Checkout() {
     fetchUpdatedEta();
   }, [deliveryCoords.lat, deliveryCoords.lng, activeRestaurantId]);
 
-  // Calculate totals
   const itemTotal = cartList.reduce((sum, entry) => {
     const itemObj = entry.item || entry.menu_item || entry;
     const rawPrice = entry.price ?? itemObj.price ?? 0;
@@ -186,78 +181,77 @@ export default function Checkout() {
   const platformFee = itemTotal > 0 ? 14.90 : 0;
   const gstTax = Math.round(itemTotal * 0.05 * 100) / 100;
   const finalTotal = (itemTotal + deliveryFee + platformFee + gstTax + tipAmount).toFixed(2);
-const handlePlaceOrder = async (e) => {
-  e?.preventDefault();
 
-  const activeUser = user;
-  if (!activeUser) {
-    setIsAuthModalOpen(true);
-    return;
-  }
+  const handlePlaceOrder = async (e) => {
+    e?.preventDefault();
 
-  // Validate address selection
-  if (!address || !address.trim()) {
-    alert('Please select or enter a delivery address.');
-    return;
-  }
+    const activeUser = user;
+    if (!activeUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
 
-  if (!cartList || cartList.length === 0) {
-    alert('Your cart is empty!');
-    return;
-  }
+    if (!address || !address.trim()) {
+      alert('Please select or enter a delivery address.');
+      return;
+    }
 
-  setIsSubmitting(true);
+    if (!cartList || cartList.length === 0) {
+      alert('Your cart is empty!');
+      return;
+    }
 
-  // Send selectedAddressId, address string, and coordinates explicitly
-  const orderPayload = {
-    user_id: activeUser.id || activeUser.user_id,
-    address_id: selectedAddressId || null,               // Explicitly passes selected ID (e.g., 1, 2, 3, or 4)
-    restaurant_id: activeRestaurantId,
-    delivery_address: address,                           // Passes selected address text
-    delivery_latitude: deliveryCoords?.lat || null,       // Passes selected latitude
-    delivery_longitude: deliveryCoords?.lng || null,     // Passes selected longitude
-    payment_method: paymentMethod,
-    payment_status: paymentMethod === 'Cash on Delivery' ? 'Pending' : 'Paid',
-    item_total: itemTotal,
-    tax: gstTax,
-    delivery_fee: deliveryFee,
-    platform_fee: platformFee,
-    tip_amount: tipAmount,
-    final_total: parseFloat(finalTotal),
-    items: cartList,
-  };
+    if (!activeRestaurantId) {
+      alert('Invalid restaurant selected. Please re-add items to cart.');
+      return;
+    }
 
-  try {
-    const response = await apiFetch('/api/orders', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify(orderPayload),
-    });
+    setIsSubmitting(true);
 
-    const data = await response.json();
+    const orderPayload = {
+      user_id: activeUser.id || activeUser.user_id,
+      address_id: selectedAddressId || null,
+      restaurant_id: activeRestaurantId,
+      delivery_address: address,
+      delivery_latitude: deliveryCoords?.lat || null,
+      delivery_longitude: deliveryCoords?.lng || null,
+      payment_method: paymentMethod,
+      payment_status: paymentMethod === 'Cash on Delivery' ? 'Pending' : 'Paid',
+      item_total: itemTotal,
+      tax: gstTax,
+      delivery_fee: deliveryFee,
+      platform_fee: platformFee,
+      tip_amount: tipAmount,
+      final_total: parseFloat(finalTotal),
+      items: cartList,
+    };
 
-    if (response.ok) {
-      if (clearCart) clearCart();
-      const createdOrderId = data.order_id || data.orderId || data.order?.id;
-      if (createdOrderId) {
+    try {
+      const response = await apiFetch('/api/orders', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(orderPayload),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (clearCart) clearCart();
+        const createdOrderId = data.order_id || data.orderId || data.order?.id || data.id;
         navigate(`/order-tracking/${createdOrderId}`);
       } else {
-        alert('Order created, but could not retrieve order ID.');
+        alert(data.message || 'Failed to place order.');
       }
-    } else {
-      alert(data.message || 'Failed to place order.');
+    } catch (error) {
+      console.error('Order error:', error);
+      alert('Error connecting to backend server.');
+    } finally {
+      setIsSubmitting(false);
     }
-  
-  } catch (error) {
-    console.error('Order error:', error);
-    alert('Error connecting to backend server.');
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
 
   if (cartList.length === 0) {
     return (
@@ -308,7 +302,6 @@ const handlePlaceOrder = async (e) => {
       </div>
 
       <div className="max-w-md mx-auto p-4 space-y-3.5">
-
         {/* ITEMS IN CART CARD */}
         <div className="bg-[#1c1c22] rounded-2xl p-4 border border-white/5 space-y-3">
           {cartList.map((entry, idx) => {
@@ -431,7 +424,6 @@ const handlePlaceOrder = async (e) => {
           </div>
           <span className="text-zinc-400 text-xs">❯</span>
         </div>
-
       </div>
 
       {/* STICKY BOTTOM PAY BAR */}
@@ -474,7 +466,6 @@ const handlePlaceOrder = async (e) => {
       {showAddressSelector && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end">
           <div className="bg-[#18181c] border-t border-white/10 rounded-t-3xl p-5 space-y-4 max-h-[85vh] overflow-y-auto">
-            
             <div className="flex items-center justify-between pb-1">
               <h3 className="text-lg font-bold text-white">Select an address</h3>
               <button 
@@ -485,7 +476,6 @@ const handlePlaceOrder = async (e) => {
               </button>
             </div>
 
-            {/* Add Address Action */}
             <div 
               onClick={() => {
                 setShowAddressSelector(false);
@@ -501,7 +491,6 @@ const handlePlaceOrder = async (e) => {
               <span className="text-zinc-400 text-xs">❯</span>
             </div>
 
-            {/* SAVED ADDRESSES LIST */}
             <div className="space-y-3 pt-2">
               <div className="text-[11px] font-bold text-zinc-400 tracking-wider uppercase">
                 SAVED ADDRESSES
@@ -537,7 +526,6 @@ const handlePlaceOrder = async (e) => {
                             <h4 className="text-xs font-bold text-white capitalize">
                               {addr.label || addr.type || 'Home'}
                             </h4>
-                            <span className="text-[10px] text-zinc-400">0 m</span>
                           </div>
                           <p className="text-xs text-zinc-300 leading-relaxed">
                             {formattedText}
@@ -560,19 +548,12 @@ const handlePlaceOrder = async (e) => {
                         >
                           ✏️
                         </button>
-                        <button className="w-7 h-7 rounded-full bg-[#2a2a32] flex items-center justify-center text-zinc-300 text-xs hover:text-white">
-                          ↗
-                        </button>
-                        <button className="w-7 h-7 rounded-full bg-[#2a2a32] flex items-center justify-center text-zinc-300 text-xs hover:text-white">
-                          📷
-                        </button>
                       </div>
                     </div>
                   );
                 })
               )}
             </div>
-
           </div>
         </div>
       )}
@@ -581,7 +562,6 @@ const handlePlaceOrder = async (e) => {
       {showBillSummary && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end">
           <div className="bg-[#18181c] border-t border-white/10 rounded-t-3xl p-5 space-y-5 max-h-[85vh] overflow-y-auto">
-            
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-white">Bill Summary</h3>
               <button 
@@ -628,56 +608,6 @@ const handlePlaceOrder = async (e) => {
                 <span>₹{finalTotal}</span>
               </div>
             </div>
-
-            <div className="space-y-3">
-              <div className="text-[11px] font-bold text-zinc-400 tracking-wider text-center uppercase">
-                GRATITUDE CORNER
-              </div>
-
-              <div className="bg-[#212127] rounded-2xl p-4 border border-white/5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-xs font-bold text-white">Tip your delivery partner</h4>
-                    <p className="text-[10px] text-zinc-400 max-w-[200px] mt-0.5">
-                      They'll get notified instantly. The full tip is sent after delivery
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 bg-[#2d1b22] rounded-full flex items-center justify-center text-xl shrink-0">
-                    👨‍✈️
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 gap-2 pt-1">
-                  {[20, 30, 50].map((amt) => (
-                    <button
-                      key={amt}
-                      onClick={() => setTipAmount(tipAmount === amt ? 0 : amt)}
-                      className={`py-2 rounded-xl text-xs font-bold border transition ${
-                        tipAmount === amt
-                          ? 'bg-[#132a20] border-emerald-500 text-emerald-300'
-                          : 'bg-[#2a2a32] border-white/5 text-zinc-300 hover:bg-[#32323c]'
-                      }`}
-                    >
-                      ₹{amt}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => {
-                      const val = prompt('Enter custom tip amount in ₹:');
-                      if (val && !isNaN(val)) setTipAmount(Number(val));
-                    }}
-                    className={`py-2 rounded-xl text-xs font-bold border transition ${
-                      tipAmount > 0 && ![20, 30, 50].includes(tipAmount)
-                        ? 'bg-[#132a20] border-emerald-500 text-emerald-300'
-                        : 'bg-[#2a2a32] border-white/5 text-zinc-300 hover:bg-[#32323c]'
-                    }`}
-                  >
-                    Other
-                  </button>
-                </div>
-              </div>
-            </div>
-
           </div>
         </div>
       )}
