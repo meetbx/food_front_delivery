@@ -237,83 +237,83 @@ useEffect(() => {
         {/* ========================================================= */}
         {/* 3. STICKY TOP CONTAINER (SEARCH BAR + DISH CATEGORIES)   */}
         {/* ========================================================= */}
-        <div className="sticky top-0 z-40 bg-[#121212]/95 backdrop-blur-md pt-2 pb-2 space-y-3 -mx-4 px-4 sm:-mx-6 sm:px-6 transition-all border-b border-white/5 shadow-xl">
-          
-          {/* SEARCH BAR ROW */}
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={handleResetFilters}
-              aria-label="Back to home"
-              className={`rounded-full bg-[#1c232d] border border-white/20 flex items-center justify-center text-white hover:bg-white/10 transition-all duration-600 ease-[cubic-bezier(0.16,1,0.3,1)] shrink-0 shadow-lg ${
-                isFiltered
-                  ? 'w-10 h-10 opacity-100 scale-100 rotate-0'
-                  : 'w-0 h-10 opacity-0 scale-50 -rotate-45 p-0 border-0 pointer-events-none'
-              }`}
-            >
-              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-              </svg>
-            </button>
+       <div className="sticky top-0 z-50 bg-[#121212]/95 backdrop-blur-md pt-2 pb-2 space-y-3 -mx-4 px-4 sm:-mx-6 sm:px-6 border-b border-white/5 shadow-xl">
+  
+  {/* SEARCH BAR ROW */}
+  <div className="flex items-center gap-2.5">
+    <button
+      onClick={handleResetFilters}
+      aria-label="Back to home"
+      className={`rounded-full bg-[#1c232d] border border-white/20 flex items-center justify-center text-white hover:bg-white/10 transition-all duration-600 ease-[cubic-bezier(0.16,1,0.3,1)] shrink-0 shadow-lg ${
+        isFiltered
+          ? 'w-10 h-10 opacity-100 scale-100 rotate-0'
+          : 'w-0 h-10 opacity-0 scale-50 -rotate-45 p-0 border-0 pointer-events-none'
+      }`}
+    >
+      <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+      </svg>
+    </button>
 
-            <div className="flex-1 bg-[#18202e]/90 border border-white/10 rounded-full px-4 py-2.5 shadow-lg flex items-center">
-              <svg className="w-5 h-5 text-white/80 shrink-0 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-              </svg>
+    <div className="flex-1 bg-[#18202e]/90 border border-white/10 rounded-full px-4 py-2.5 shadow-lg flex items-center">
+      <svg className="w-5 h-5 text-white/80 shrink-0 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+      </svg>
 
-              <input
-                type="text"
-                placeholder={
-                  selectedCuisine !== 'All'
-                    ? `Search in ${selectedCuisine}...`
-                    : 'Search "chaat" or dishes...'
-                }
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-transparent border-none outline-none text-white placeholder-white/60 text-sm font-medium"
-              />
+      <input
+        type="text"
+        placeholder={
+          selectedCuisine !== 'All'
+            ? `Search in ${selectedCuisine}...`
+            : 'Search "chaat" or dishes...'
+        }
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="w-full bg-transparent border-none outline-none text-white placeholder-white/60 text-sm font-medium"
+      />
 
-              <div className="h-5 w-[1px] bg-white/20 mx-3 shrink-0" />
-              <button aria-label="Voice Search" className="text-white/80 hover:text-white transition shrink-0 focus:outline-none">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 003-3V6a3 3 0 116 0v6a3 3 0 003 3z" />
-                </svg>
-              </button>
-            </div>
+      <div className="h-5 w-[1px] bg-white/20 mx-3 shrink-0" />
+      <button aria-label="Voice Search" className="text-white/80 hover:text-white transition shrink-0 focus:outline-none">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 003-3V6a3 3 0 116 0v6a3 3 0 003 3z" />
+        </svg>
+      </button>
+    </div>
 
-            {/* Veg Mode Toggle */}
-            <div
-              className={`flex flex-col items-center shrink-0 transition-all duration-600 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden ${
-                isFiltered 
-                  ? 'max-w-0 opacity-0 translate-x-3 scale-90 pointer-events-none ml-0' 
-                  : 'max-w-[50px] opacity-100 translate-x-0 scale-100 ml-1'
-              }`}
-            >
-              <span className="text-[8px] font-black tracking-tighter text-zinc-300 uppercase leading-tight text-center whitespace-nowrap">
-                VEG<br />MODE
-              </span>
-              <button
-                onClick={() => setVegOnly(!vegOnly)}
-                aria-label="Toggle Veg Mode"
-                className={`mt-1 w-8 h-4.5 flex items-center rounded-full p-0.5 transition-colors ${
-                  vegOnly ? 'bg-emerald-500 justify-end' : 'bg-zinc-700 justify-start'
-                }`}
-              >
-                <div className="w-3.5 h-3.5 bg-white rounded-full shadow-md" />
-              </button>
-            </div>
-          </div>
+    {/* Veg Mode Toggle */}
+    <div
+      className={`flex flex-col items-center shrink-0 transition-all duration-600 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        isFiltered 
+          ? 'max-w-0 opacity-0 translate-x-3 scale-90 pointer-events-none ml-0' 
+          : 'max-w-[50px] opacity-100 translate-x-0 scale-100 ml-1'
+      }`}
+    >
+      <span className="text-[8px] font-black tracking-tighter text-zinc-300 uppercase leading-tight text-center whitespace-nowrap">
+        VEG<br />MODE
+      </span>
+      <button
+        onClick={() => setVegOnly(!vegOnly)}
+        aria-label="Toggle Veg Mode"
+        className={`mt-1 w-8 h-4.5 flex items-center rounded-full p-0.5 transition-colors ${
+          vegOnly ? 'bg-emerald-500 justify-end' : 'bg-zinc-700 justify-start'
+        }`}
+      >
+        <div className="w-3.5 h-3.5 bg-white rounded-full shadow-md" />
+      </button>
+    </div>
+  </div>
 
-          {/* DISH SELECTION MENU */}
-          <div className="overflow-hidden">
-            <CategoryMenu
-              activeCategory={selectedCuisine}
-              onSelectCategory={(categoryName) => {
-                setSearchQuery('');
-                setSelectedCuisine(categoryName);
-              }}
-            />
-          </div>
-        </div>
+  {/* DISH SELECTION MENU */}
+  <div className="w-full">
+    <CategoryMenu
+      activeCategory={selectedCuisine}
+      onSelectCategory={(categoryName) => {
+        setSearchQuery('');
+        setSelectedCuisine(categoryName);
+      }}
+    />
+  </div>
+</div>
 
         {/* Quick Filter Chips */}
         <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-1">
