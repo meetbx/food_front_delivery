@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
 
 const CATEGORIES = [
-  { id: 'All', name: 'All', image: '/categories/all.png' },
-  { id: 'Pizza', name: 'Pizza', image: '/categories/pizza.png' },
-  { id: 'Burgers', name: 'Burger', image: '/categories/burger.png' },
-  { id: 'Cake', name: 'Cake', image: '/categories/cake.png' },
-  { id: 'Thali', name: 'Thali', image: '/categories/thali.png' },
-  { id: 'vadapav', name: 'Vadapav', image: '/categories/vadapav.png' },
-  { id: 'Sandwich', name: 'Sandwich', image: '/categories/sandwich.png' },
-  { id: 'Biryani', name: 'Biryani', image: '/categories/biryani.png' },
-  { id: 'Chinese', name: 'Chinese', image: '/categories/Chinese.png' },
+  { id: 'All', name: 'All', image: '/categories/all.webp' },
+  { id: 'Pizza', name: 'Pizza', image: '/categories/pizza.webp' },
+  { id: 'Burgers', name: 'Burger', image: '/categories/burger.webp' },
+  { id: 'Cake', name: 'Cake', image: '/categories/cake.webp' },
+  { id: 'Thali', name: 'Thali', image: '/categories/thali.webp' },
+  { id: 'vadapav', name: 'Vadapav', image: '/categories/vadapav.webp' },
+  { id: 'Sandwich', name: 'Sandwich', image: '/categories/sandwich.webp' },
+  { id: 'Biryani', name: 'Biryani', image: '/categories/biryani.webp' },
+  { id: 'Chinese', name: 'Chinese', image: '/categories/Chinese.webp' },
 ];
 
 export default function CategoryMenu({ activeCategory = 'All', onSelectCategory }) {
