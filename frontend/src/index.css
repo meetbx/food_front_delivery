@@ -3,31 +3,28 @@
 /* Enables class-based dark mode for the .dark class on <html> */
 @variant dark (&:where(.dark, .dark *));
 
-/* Global Utilities */
-@utility no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-@utility no-scrollbar::-webkit-scrollbar {
-  display: none;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Add mobile overflow & zoom fixes here */
+@layer base {
+  html, body {
+    @apply w-full max-w-full overflow-x-hidden m-0 p-0;
+    touch-action: manipulation; /* Stops double-tap zoom on iOS */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  #root {
+    @apply w-full max-w-full overflow-x-hidden;
+  }
+
+  /* Stops iOS Safari auto-zoom when tapping search/text inputs */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }
 
-/* Base HTML & Body Layout */
-html, body {
-  min-height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow-y: auto; 
-}
-
-#root {
-  min-height: 100vh;
-}
-
-/* Stops iOS Safari auto-zoom when tapping search/text inputs */
-input, select, textarea {
-  font-size: 16px !important;
-}
 
 .root-wrapper {
   overflow-x: clip;
