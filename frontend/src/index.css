@@ -17,9 +17,9 @@ html, body {
   overflow-y: auto; 
 }
 
-  #root {
-    @apply w-full max-w-full overflow-x-hidden;
-  }
+#root {
+  min-height: 100vh;
+}
 
   /* Stops iOS Safari auto-zoom when tapping search/text inputs */
   input, select, textarea {
