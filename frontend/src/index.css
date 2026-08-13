@@ -3,12 +3,13 @@
 /* Enables class-based dark mode for the .dark class on <html> */
 @variant dark (&:where(.dark, .dark *));
 
+/* Hide scrollbars cleanly for CategoryMenu */
 @utility no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
-}
-@utility no-scrollbar::-webkit-scrollbar {
-  display: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Mobile Screen Bounds & Zoom Fixes */
@@ -17,7 +18,7 @@ html, body {
   width: 100%;
   margin: 0;
   padding: 0;
-  /* ✅ CRITICAL: clip prevents horizontal page overflow WITHOUT breaking sticky */
+  /* Clips horizontal overflow without breaking position: sticky */
   overflow-x: clip;
   -webkit-text-size-adjust: 100%;
   touch-action: manipulation;
@@ -29,11 +30,10 @@ html, body {
   overflow-x: clip;
 }
 
-/* Prevents iOS Safari from auto-zooming when tapping search or text inputs */
+/* Prevents iOS Safari auto-zoom when tapping inputs */
 input, select, textarea {
   font-size: 16px !important;
 }
-
 /* Force Google Places Autocomplete dropdown to appear above full-screen modals */
 .pac-container {
   z-index: 99999 !important;
