@@ -3,6 +3,36 @@
 /* Enables class-based dark mode for the .dark class on <html> */
 @variant dark (&:where(.dark, .dark *));
 
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+@utility no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile Screen Bounds & Zoom Fixes */
+html, body {
+  min-height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  /* ✅ CRITICAL: clip prevents horizontal page overflow WITHOUT breaking sticky */
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+#root {
+  min-height: 100vh;
+  width: 100%;
+  overflow-x: clip;
+}
+
+/* Prevents iOS Safari from auto-zooming when tapping search or text inputs */
+input, select, textarea {
+  font-size: 16px !important;
+}
 
 /* Force Google Places Autocomplete dropdown to appear above full-screen modals */
 .pac-container {
