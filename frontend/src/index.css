@@ -3,17 +3,20 @@
 /* Enables class-based dark mode for the .dark class on <html> */
 @variant dark (&:where(.dark, .dark *));
 
+/* Global Utilities */
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+@utility no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* Add mobile overflow & zoom fixes here */
+/* Base HTML & Body Layout */
 html, body {
   min-height: 100%;
   margin: 0;
   padding: 0;
-  /* DO NOT set overflow: hidden or overflow-x: hidden on body/html */
   overflow-y: auto; 
 }
 
@@ -21,22 +24,21 @@ html, body {
   min-height: 100vh;
 }
 
-  /* Stops iOS Safari auto-zoom when tapping search/text inputs */
-  input, select, textarea {
-    font-size: 16px !important;
-  }
+/* Stops iOS Safari auto-zoom when tapping search/text inputs */
+input, select, textarea {
+  font-size: 16px !important;
 }
 
 .root-wrapper {
   overflow-x: clip;
 }
 
-
 /* Force Google Places Autocomplete dropdown to appear above full-screen modals */
 .pac-container {
   z-index: 99999 !important;
 }
 
+/* Custom CSS Rules */
 .counter {
   font-size: 16px;
   padding: 5px 10px;
