@@ -304,7 +304,7 @@ useEffect(() => {
           </div>
 
           {/* DISH SELECTION MENU */}
-          <div className="bg-[#181818] rounded-2xl border border-[#2a2a2a] shadow-md overflow-hidden">
+          <div className="overflow-hidden">
             <CategoryMenu
               activeCategory={selectedCuisine}
               onSelectCategory={(categoryName) => {
