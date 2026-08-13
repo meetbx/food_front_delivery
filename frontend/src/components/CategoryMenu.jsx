@@ -27,9 +27,8 @@ export default function CategoryMenu({ activeCategory = 'All', onSelectCategory 
   };
 
   return (
-    <div className="w-full py-3 bg-[#121212]">
-      {/* Added classes below to hide scrollbars across Chrome, Safari, Firefox, and Edge */}
-      <div className="flex items-center gap-5 overflow-x-auto px-4 scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+    <div className="w-full py-2">
+      <div className="flex items-center gap-6 overflow-x-auto px-2 scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {CATEGORIES.map((cat) => {
           const isActive = selected.toLowerCase() === cat.id.toLowerCase();
 
@@ -37,33 +36,29 @@ export default function CategoryMenu({ activeCategory = 'All', onSelectCategory 
             <button
               key={cat.id}
               onClick={() => handleSelect(cat.id)}
-              className="group flex flex-col items-center flex-shrink-0 cursor-pointer relative pb-3 transition-all focus:outline-none"
+              className="group flex flex-col items-center flex-shrink-0 cursor-pointer relative pb-2 focus:outline-none"
             >
-              {/* Dark Circular Dish Plate */}
-              <div
-                className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#1e1e1e] border border-[#333333] flex items-center justify-center p-2 shadow-md transition-all duration-200 group-hover:scale-105 ${
-                  isActive ? 'scale-105 border-emerald-500/50 shadow-emerald-950/30' : 'opacity-90 hover:opacity-100'
-                }`}
-              >
+              {/* Direct Dish Image (No Circle Wrapper Container) */}
+              <div className="w-20 h-16 sm:w-24 sm:h-20 flex items-center justify-center transition-transform duration-200 group-hover:scale-105">
                 <img
                   src={cat.image}
                   alt={cat.name}
-                  className="max-h-full max-w-full object-contain filter drop-shadow-md group-hover:scale-110 transition-transform duration-200"
+                  className="w-full h-full object-contain filter drop-shadow-xl"
                 />
               </div>
 
               {/* Category Title */}
               <span
-                className={`text-xs font-semibold mt-2 transition-colors ${
+                className={`text-xs sm:text-sm font-semibold mt-1 transition-colors ${
                   isActive ? 'text-white font-bold' : 'text-zinc-400 group-hover:text-zinc-200'
                 }`}
               >
                 {cat.name}
               </span>
 
-              {/* Active Emerald Underline Bar */}
+              {/* Active Underline Indicator */}
               {isActive && (
-                <span className="absolute bottom-0 left-1 right-1 h-[3px] bg-emerald-500 rounded-full transition-all" />
+                <span className="absolute bottom-0 left-2 right-2 h-[3px] bg-emerald-500 rounded-full transition-all" />
               )}
             </button>
           );
