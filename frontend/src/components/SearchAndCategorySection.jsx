@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { apiFetch } from '../config'; // Ensure path matches your project structure
 
 const categories = ['All', 'Pizzas', 'Burgers', 'Biryani', 'Chinese', 'Desserts'];
@@ -105,16 +106,17 @@ export default function SearchAndCategorySection() {
           style={{
             width: '100%',
             padding: '12px 18px',
-            fontSize: '16px',
+            fontSize: '16px', // Prevents iOS Safari auto-zoom
             borderRadius: '8px',
             border: '1px solid #ccc',
-            boxSizing: 'border-box'
+            boxSizing: 'border-box',
+            touchAction: 'manipulation'
           }}
         />
       </div>
 
       {/* --- CATEGORY PILLS --- */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '30px', overflowX: 'auto', paddingBottom: '5px' }}>
+      <div className="no-scrollbar" style={{ display: 'flex', gap: '10px', marginBottom: '30px', overflowX: 'auto', paddingBottom: '5px' }}>
         {categories.map((cat) => {
           const isActive = selectedCategory === cat && searchTerm === '';
           return (
@@ -129,6 +131,7 @@ export default function SearchAndCategorySection() {
                 color: isActive ? '#ffffff' : '#333333',
                 fontWeight: 'bold',
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
                 transition: 'all 0.2s ease-in-out'
               }}
             >
@@ -139,57 +142,65 @@ export default function SearchAndCategorySection() {
       </div>
 
       {/* --- RESULTS SECTION --- */}
-      {loading && <p style={{ color: '#666' }}>Loading restaurants...</p>}
-      {error && <p style={{ color: 'red' }}>Error: {error}</p>}
+      {loading && <p style={{ color: '#aaa' }}>Loading restaurants...</p>}
+      {error && <p style={{ color: '#ff4757' }}>Error: {error}</p>}
 
       {!loading && !error && restaurants.length === 0 && (
-        <p style={{ color: '#777', fontSize: '18px' }}>No restaurants or dishes found matching your search.</p>
+        <p style={{ color: '#aaa', fontSize: '18px' }}>No restaurants or dishes found matching your search.</p>
       )}
 
       {/* --- RESTAURANT CARDS GRID --- */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
         {!loading && restaurants.map((item) => {
-          const restaurantId = item.restaurant_id || item.id;
+          // ✅ Safe Fallback for ID Resolution (Fixes /restaurant/undefined issue)
+          const restaurantId = item.restaurant_id || item.id || item._id;
           const restaurantName = item.restaurant_name || item.name;
           const image = item.restaurant_image || item.image_url;
           const matchingDishes = item.matching_dishes || [];
 
           return (
-            <div
-              key={restaurantId}
+            <Link
+              key={restaurantId || Math.random()}
+              to={restaurantId ? `/restaurant/${restaurantId}` : '#'}
               style={{
-                border: '1px solid #eee',
+                textDecoration: 'none',
+                color: 'inherit',
+                border: '1px solid #333',
                 borderRadius: '12px',
                 overflow: 'hidden',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-                backgroundColor: '#fff'
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                backgroundColor: '#1e1e1e',
+                display: 'block'
               }}
             >
               <img
                 src={image || 'https://via.placeholder.com/300x180'}
                 alt={restaurantName}
                 style={{ width: '100%', height: '180px', objectFit: 'cover' }}
+                onError={(e) => {
+                  e.currentTarget.src = 'https://via.placeholder.com/300x180';
+                }}
               />
               
               <div style={{ padding: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>{restaurantName}</h3>
+                  <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', color: '#fff' }}>{restaurantName}</h3>
                   <span style={{ backgroundColor: '#2ed573', color: '#fff', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' }}>
                     ★ {item.rating || '4.0'}
                   </span>
                 </div>
 
-                <p style={{ color: '#666', margin: '4px 0', fontSize: '14px' }}>
+                <p style={{ color: '#aaa', margin: '4px 0', fontSize: '14px' }}>
                   {item.cuisine_type || item.cuisine || 'Multi-Cuisine'} • {item.delivery_time || '30 mins'}
                 </p>
 
                 {matchingDishes.length > 0 && (
-                  <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px dashed #ddd' }}>
+                  <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px dashed #444' }}>
                     <p style={{ fontSize: '12px', color: '#ff4757', fontWeight: 'bold', margin: '0 0 6px 0' }}>
                       Matching Dishes:
                     </p>
                     {matchingDishes.slice(0, 2).map((dish) => (
-                      <div key={dish.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#444' }}>
+                      <div key={dish.id || dish._id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#ddd' }}>
                         <span>{dish.is_veg ? '🟢' : '🔴'} {dish.name}</span>
                         <strong>₹{dish.price}</strong>
                       </div>
@@ -197,7 +208,7 @@ export default function SearchAndCategorySection() {
                   </div>
                 )}
               </div>
-            </div>
+            </Link>
           );
         })}
       </div>
