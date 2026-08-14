@@ -33,8 +33,8 @@ export default function App() {
           <CartProvider>
             <RiderAuthProvider>
               <Router>
-                <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-20 transition-colors duration-300">
-                  <Routes>
+<div className="min-h-screen bg-[#121212] text-slate-100 pb-20">          
+  <Routes>
                     {/* Customer Routes */}
                     <Route path="/" element={<Home />} />
                     <Route path="/restaurant/:id" element={<RestaurantDetail />} />
