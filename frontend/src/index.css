@@ -18,7 +18,8 @@ html, body {
   width: 100%;
   margin: 0;
   padding: 0;
-  /* Clips horizontal overflow without breaking position: sticky */
+  background-color: #121212 !important; /* Prevents white gaps on scroll */
+  color: #f8fafc;
   overflow-x: clip;
   -webkit-text-size-adjust: 100%;
   touch-action: manipulation;
@@ -27,6 +28,7 @@ html, body {
 #root {
   min-height: 100vh;
   width: 100%;
+  background-color: #121212 !important;
   overflow-x: clip;
 }
 
