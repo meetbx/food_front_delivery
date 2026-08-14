@@ -1,5 +1,5 @@
 
-export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://food-delivery-rwor.onrender.com';
+export const API_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'https://food-delivery-rwor.onrender.com';
 
 // 2. Helper fetch wrapper so you don't repeat headers in 20 files
 export const apiFetch = async (endpoint, options = {}) => {
