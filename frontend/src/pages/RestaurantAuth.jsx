@@ -31,7 +31,7 @@ export default function RestaurantAuth() {
     const endpoint = isLogin ? '/api/restaurant/login' : '/api/restaurant/register';
 
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
