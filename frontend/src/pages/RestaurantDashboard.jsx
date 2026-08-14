@@ -60,7 +60,7 @@ export default function RestaurantDashboard() {
     if (!restaurantId) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/restaurant/${restaurantId}/orders`);
+      const response = await fetch(`${API_BASE}/api/restaurant/${restaurantId}/orders`);
       if (response.ok) {
         const data = await response.json();
         setOrders(data);
@@ -78,7 +78,7 @@ export default function RestaurantDashboard() {
     setLoadingMenu(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/restaurants/${restaurantId}`);
+      const response = await fetch(`${API_BASE}/api/restaurants/${restaurantId}`);
       if (response.ok) {
         const data = await response.json();
         setMenuItems(data.menu || []);
@@ -126,7 +126,7 @@ export default function RestaurantDashboard() {
 
     setUpdatingRestImg(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/restaurants/${restaurant.id}`, {
+      const response = await fetch(`${API_BASE}/api/restaurants/${restaurant.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_url: restImgUrl })
@@ -152,7 +152,7 @@ export default function RestaurantDashboard() {
   // Update order status
   const handleUpdateStatus = async (orderId, newStatus) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}/status`, {
+      const response = await fetch(`${API_BASE}/api/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -175,7 +175,7 @@ export default function RestaurantDashboard() {
 
     setAddingDish(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/restaurants/${restaurant.id}/menu`, {
+      const response = await fetch(`${API_BASE}/api/restaurants/${restaurant.id}/menu`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -218,7 +218,7 @@ export default function RestaurantDashboard() {
 
     setUpdatingDish(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/menu-items/${editingDish.id}`, {
+      const response = await fetch(`${API_BASE}/api/menu-items/${editingDish.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -251,7 +251,7 @@ export default function RestaurantDashboard() {
     if (!window.confirm('Are you sure you want to remove this dish?')) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/menu-items/${dishId}`, {
+      const response = await fetch(`${API_BASE}/api/menu-items/${dishId}`, {
         method: 'DELETE'
       });
 
