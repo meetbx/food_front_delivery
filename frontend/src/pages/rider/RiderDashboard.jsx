@@ -1,26 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Navigation, 
   Phone, 
   MapPin, 
   Store, 
-  User, 
   CheckCircle2, 
-  DollarSign, 
-  ShoppingBag, 
-  Star, 
+  Clock, 
   Zap, 
-  ArrowRight,
-  Clock,
+  ChevronRight,
   ShieldCheck,
-  ChevronRight
+  Star
 } from 'lucide-react';
 
 const STEPS = {
-  ACCEPTED: { label: 'Arrived at Restaurant', next: 'ARRIVED_RESTAURANT', stepNum: 1, color: 'bg-blue-600 hover:bg-blue-700' },
-  ARRIVED_RESTAURANT: { label: 'Confirm Picked Up', next: 'PICKED_UP', stepNum: 2, color: 'bg-indigo-600 hover:bg-indigo-700' },
-  PICKED_UP: { label: 'Arrived at Customer', next: 'ARRIVED_CUSTOMER', stepNum: 3, color: 'bg-purple-600 hover:bg-purple-700' },
-  ARRIVED_CUSTOMER: { label: 'Complete Delivery', next: 'DELIVERED', stepNum: 4, color: 'bg-emerald-600 hover:bg-emerald-700' },
+  ACCEPTED: { label: 'Arrived at Restaurant', next: 'ARRIVED_RESTAURANT', stepNum: 1 },
+  ARRIVED_RESTAURANT: { label: 'Confirm Picked Up', next: 'PICKED_UP', stepNum: 2 },
+  PICKED_UP: { label: 'Arrived at Customer', next: 'ARRIVED_CUSTOMER', stepNum: 3 },
+  ARRIVED_CUSTOMER: { label: 'Complete Delivery', next: 'DELIVERED', stepNum: 4 },
 };
 
 export default function RiderDashboard() {
@@ -97,127 +93,118 @@ export default function RiderDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans max-w-md mx-auto pb-20 border-x border-slate-800 shadow-2xl">
+    <div className="min-h-screen bg-[#121212] text-white font-sans max-w-md mx-auto pb-20 border-x border-[#2a2a2a]">
       
-      {/* APP HEADER */}
-      <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md px-5 py-4 border-b border-slate-800 flex justify-between items-center">
+      {/* HEADER */}
+      <header className="sticky top-0 z-30 bg-[#121212]/95 backdrop-blur-md px-4 py-3.5 border-b border-[#242424] flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-emerald-400">
-              AX
-            </div>
-            <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-900 ${isOnline ? 'bg-emerald-500' : 'bg-slate-500'}`} />
+          <div className="w-10 h-10 rounded-full bg-[#1e1e1e] border border-[#333] flex items-center justify-center font-bold text-[#00b259]">
+            AX
           </div>
           <div>
-            <h1 className="text-base font-bold text-white flex items-center gap-1.5">
+            <h1 className="text-sm font-bold text-white flex items-center gap-1">
               Alex Rivera
-              <ShieldCheck className="w-4 h-4 text-blue-400" />
+              <ShieldCheck className="w-3.5 h-3.5 text-[#00b259]" />
             </h1>
-            <p className="text-xs text-slate-400">{isOnline ? 'Ready for orders' : 'Currently offline'}</p>
+            <p className="text-[11px] text-gray-400">{isOnline ? 'Online & Ready' : 'Offline'}</p>
           </div>
         </div>
 
-        {/* ONLINE TOGGLE */}
+        {/* ONLINE / OFFLINE TOGGLE */}
         <button
           onClick={() => setIsOnline(!isOnline)}
-          className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 border ${
+          className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${
             isOnline 
-              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-lg shadow-emerald-500/10' 
-              : 'bg-slate-800 text-slate-400 border-slate-700'
+              ? 'bg-[#00b259] text-white shadow-lg shadow-[#00b259]/20' 
+              : 'bg-[#282828] text-gray-400 border border-[#3a3a3a]'
           }`}
         >
-          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-white animate-pulse' : 'bg-gray-500'}`} />
           {isOnline ? 'ONLINE' : 'OFFLINE'}
         </button>
       </header>
 
       <main className="p-4 space-y-4">
         
-        {/* DEV SIMULATOR BUTTON */}
+        {/* DEV TEST TRIGGER */}
         {!incomingOrder && !activeOrder && isOnline && (
           <button
             onClick={triggerSimulatedOrder}
-            className="w-full py-2.5 px-4 bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 text-indigo-300 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all"
+            className="w-full py-2 px-3 bg-[#1e1e1e] hover:bg-[#252525] border border-[#333] text-[#00b259] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
           >
-            <Zap className="w-4 h-4 text-indigo-400 fill-indigo-400" />
-            Simulate Incoming Delivery Alert
+            <Zap className="w-3.5 h-3.5 fill-[#00b259]" />
+            Simulate Incoming Order
           </button>
         )}
 
-        {/* STATS OVERVIEW CARDS */}
+        {/* DAILY STATS CARDS */}
         <section className="grid grid-cols-3 gap-2.5">
-          <div className="bg-slate-800/60 border border-slate-700/50 p-3 rounded-2xl">
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
-              <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Earnings</span>
-            </div>
-            <p className="text-lg font-bold text-white">₹{stats.todayEarnings}</p>
+          <div className="bg-[#1e1e1e] border border-[#2a2a2a] p-3 rounded-2xl text-center">
+            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Earnings</span>
+            <p className="text-base font-extrabold text-white">₹{stats.todayEarnings}</p>
           </div>
 
-          <div className="bg-slate-800/60 border border-slate-700/50 p-3 rounded-2xl">
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
-              <ShoppingBag className="w-3.5 h-3.5 text-blue-400" />
-              <span>Orders</span>
-            </div>
-            <p className="text-lg font-bold text-white">{stats.completedOrders}</p>
+          <div className="bg-[#1e1e1e] border border-[#2a2a2a] p-3 rounded-2xl text-center">
+            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Orders</span>
+            <p className="text-base font-extrabold text-white">{stats.completedOrders}</p>
           </div>
 
-          <div className="bg-slate-800/60 border border-slate-700/50 p-3 rounded-2xl">
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
-              <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-              <span>Rating</span>
+          <div className="bg-[#1e1e1e] border border-[#2a2a2a] p-3 rounded-2xl text-center">
+            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Rating</span>
+            <div className="flex items-center justify-center gap-1">
+              <Star className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400" />
+              <p className="text-base font-extrabold text-white">{stats.rating}</p>
             </div>
-            <p className="text-lg font-bold text-white">{stats.rating}</p>
           </div>
         </section>
 
-        {/* INCOMING ORDER MODAL */}
+        {/* INCOMING ORDER OFFER MODAL */}
         {incomingOrder && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-            <div className="w-full max-w-md bg-slate-800 border border-slate-700 rounded-3xl p-5 space-y-4 shadow-2xl animate-in slide-in-from-bottom duration-200">
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end justify-center p-4">
+            <div className="w-full max-w-md bg-[#1e1e1e] border border-[#333] rounded-3xl p-5 space-y-4 shadow-2xl animate-in slide-in-from-bottom duration-200">
               <div className="flex justify-between items-start">
                 <div>
-                  <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                    <Clock className="w-3 h-3 animate-spin" /> New Order Offer
+                  <span className="inline-flex items-center gap-1 bg-[#00b259]/15 text-[#00b259] text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-[#00b259]/30">
+                    <Clock className="w-3 h-3 animate-spin" /> New Order
                   </span>
-                  <h2 className="text-xl font-bold text-white mt-1.5">{incomingOrder.restaurantName}</h2>
+                  <h2 className="text-lg font-bold text-white mt-2">{incomingOrder.restaurantName}</h2>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-slate-400 block">Payout</span>
-                  <span className="text-2xl font-black text-emerald-400">₹{incomingOrder.payout}</span>
+                  <span className="text-[10px] text-gray-400 block">Payout</span>
+                  <span className="text-xl font-black text-[#00b259]">₹{incomingOrder.payout}</span>
                 </div>
               </div>
 
-              {/* ROUTE INFO */}
-              <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-slate-700/60 space-y-3">
-                <div className="flex items-start gap-3">
-                  <Store className="w-4 h-4 text-indigo-400 mt-1 shrink-0" />
+              {/* ROUTE PREVIEW */}
+              <div className="bg-[#121212] p-3.5 rounded-2xl border border-[#2a2a2a] space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <Store className="w-4 h-4 text-[#00b259] mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-xs text-slate-400 font-medium">Pickup</p>
-                    <p className="text-xs font-semibold text-slate-200 line-clamp-1">{incomingOrder.pickupAddress}</p>
+                    <p className="text-[10px] text-gray-400 font-medium">Pickup</p>
+                    <p className="text-xs font-semibold text-gray-200 line-clamp-1">{incomingOrder.pickupAddress}</p>
                   </div>
                 </div>
-                <div className="border-t border-slate-800" />
-                <div className="flex items-start gap-3">
-                  <MapPin className="w-4 h-4 text-emerald-400 mt-1 shrink-0" />
+                <div className="border-t border-[#222]" />
+                <div className="flex items-start gap-2.5">
+                  <MapPin className="w-4 h-4 text-[#00b259] mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-xs text-slate-400 font-medium">Dropoff ({incomingOrder.distance})</p>
-                    <p className="text-xs font-semibold text-slate-200 line-clamp-1">{incomingOrder.dropAddress}</p>
+                    <p className="text-[10px] text-gray-400 font-medium">Dropoff ({incomingOrder.distance})</p>
+                    <p className="text-xs font-semibold text-gray-200 line-clamp-1">{incomingOrder.dropAddress}</p>
                   </div>
                 </div>
               </div>
 
-              {/* ACTIONS */}
+              {/* ACTION BUTTONS */}
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <button
                   onClick={handleDeclineOrder}
-                  className="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 py-3.5 rounded-xl font-bold text-sm transition-all"
+                  className="w-full bg-[#2a2a2a] hover:bg-[#333] text-gray-300 py-3 rounded-2xl font-bold text-xs transition-all"
                 >
                   Decline
                 </button>
                 <button
                   onClick={handleAcceptOrder}
-                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-3.5 rounded-xl font-extrabold text-sm transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-1.5"
+                  className="w-full bg-[#00b259] hover:bg-[#009b4d] text-white py-3 rounded-2xl font-black text-xs transition-all shadow-lg shadow-[#00b259]/20"
                 >
                   ACCEPT ORDER
                 </button>
@@ -228,144 +215,134 @@ export default function RiderDashboard() {
 
         {/* ACTIVE ORDER CARD */}
         {activeOrder && (
-          <section className="bg-slate-800 border border-slate-700/80 rounded-3xl p-5 space-y-5 shadow-xl">
+          <section className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-3xl p-4 space-y-4">
             
-            {/* CARD HEADER */}
-            <div className="flex justify-between items-center pb-3 border-b border-slate-700/60">
+            {/* HEADER */}
+            <div className="flex justify-between items-center pb-3 border-b border-[#2a2a2a]">
               <div>
-                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest block">Active Delivery</span>
-                <h2 className="text-lg font-bold text-white">{activeOrder.id}</h2>
+                <span className="text-[10px] font-bold text-[#00b259] uppercase tracking-wider block">Active Order</span>
+                <h2 className="text-base font-bold text-white">{activeOrder.id}</h2>
               </div>
               <div className="text-right">
-                <span className="text-xs text-slate-400 block">Earnings</span>
-                <span className="text-lg font-extrabold text-emerald-400">₹{activeOrder.payout}</span>
+                <span className="text-[10px] text-gray-400 block">Payout</span>
+                <span className="text-base font-extrabold text-[#00b259]">₹{activeOrder.payout}</span>
               </div>
             </div>
 
-            {/* PROGRESS STEP INDICATOR BAR */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs text-slate-400 font-medium">
-                <span>Progress Status</span>
-                <span className="text-indigo-400 font-bold">Step {STEPS[currentStep].stepNum} of 4</span>
+            {/* STEP PROGRESS BAR */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[11px] text-gray-400 font-medium">
+                <span>Progress</span>
+                <span className="text-[#00b259] font-bold">Step {STEPS[currentStep].stepNum} of 4</span>
               </div>
               <div className="grid grid-cols-4 gap-1.5">
                 {[1, 2, 3, 4].map((step) => (
                   <div
                     key={step}
-                    className={`h-2 rounded-full transition-all ${
-                      step <= STEPS[currentStep].stepNum ? 'bg-indigo-500' : 'bg-slate-700'
+                    className={`h-1.5 rounded-full transition-all ${
+                      step <= STEPS[currentStep].stepNum ? 'bg-[#00b259]' : 'bg-[#2a2a2a]'
                     }`}
                   />
                 ))}
               </div>
             </div>
 
-            {/* ROUTE DETAILS TIMELINE */}
-            <div className="relative pl-6 space-y-5 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-700">
+            {/* ROUTE LIST */}
+            <div className="space-y-3 pt-1">
               
-              {/* RESTAURANT PICKUP */}
-              <div className="relative">
-                <div className="absolute -left-6 top-0.5 w-4 h-4 rounded-full bg-slate-900 border-2 border-indigo-400 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+              {/* PICKUP LOCATION */}
+              <div className="bg-[#121212] p-3 rounded-2xl border border-[#2a2a2a] flex justify-between items-start">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-bold text-[#00b259] uppercase">1. Pickup Restaurant</span>
+                  <p className="text-xs font-bold text-white">{activeOrder.restaurantName}</p>
+                  <p className="text-[11px] text-gray-400 line-clamp-1">{activeOrder.pickupAddress}</p>
                 </div>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[10px] font-bold text-indigo-400 uppercase">Pickup Restaurant</span>
-                    <p className="text-sm font-bold text-white">{activeOrder.restaurantName}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{activeOrder.pickupAddress}</p>
-                  </div>
-                  <button
-                    onClick={() => openNavigation(activeOrder.restaurantLat, activeOrder.restaurantLng, activeOrder.pickupAddress)}
-                    className="p-2 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-xl text-xs font-semibold transition-all flex items-center gap-1"
+                <button
+                  onClick={() => openNavigation(activeOrder.restaurantLat, activeOrder.restaurantLng, activeOrder.pickupAddress)}
+                  className="p-2 bg-[#282828] text-white hover:bg-[#333] border border-[#3a3a3a] rounded-xl transition-all shrink-0"
+                >
+                  <Navigation className="w-3.5 h-3.5 text-[#00b259]" />
+                </button>
+              </div>
+
+              {/* DROPOFF LOCATION */}
+              <div className="bg-[#121212] p-3 rounded-2xl border border-[#2a2a2a] flex justify-between items-start">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-bold text-[#00b259] uppercase">2. Customer Dropoff</span>
+                  <p className="text-xs font-bold text-white">{activeOrder.customerName}</p>
+                  <p className="text-[11px] text-gray-400 line-clamp-1">{activeOrder.dropAddress}</p>
+                </div>
+                <div className="flex gap-1.5 shrink-0">
+                  <a
+                    href={`tel:${activeOrder.customerPhone}`}
+                    className="p-2 bg-[#282828] text-white hover:bg-[#333] border border-[#3a3a3a] rounded-xl transition-all"
                   >
-                    <Navigation className="w-3.5 h-3.5" />
+                    <Phone className="w-3.5 h-3.5 text-[#00b259]" />
+                  </a>
+                  <button
+                    onClick={() => openNavigation(activeOrder.customerLat, activeOrder.customerLng, activeOrder.dropAddress)}
+                    className="p-2 bg-[#282828] text-white hover:bg-[#333] border border-[#3a3a3a] rounded-xl transition-all"
+                  >
+                    <Navigation className="w-3.5 h-3.5 text-[#00b259]" />
                   </button>
                 </div>
               </div>
 
-              {/* CUSTOMER DROPOFF */}
-              <div className="relative">
-                <div className="absolute -left-6 top-0.5 w-4 h-4 rounded-full bg-slate-900 border-2 border-emerald-400 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                </div>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[10px] font-bold text-emerald-400 uppercase">Dropoff Customer</span>
-                    <p className="text-sm font-bold text-white">{activeOrder.customerName}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{activeOrder.dropAddress}</p>
-                  </div>
-                  <div className="flex gap-1.5">
-                    <a
-                      href={`tel:${activeOrder.customerPhone}`}
-                      className="p-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-xs font-semibold transition-all"
-                    >
-                      <Phone className="w-3.5 h-3.5" />
-                    </a>
-                    <button
-                      onClick={() => openNavigation(activeOrder.customerLat, activeOrder.customerLng, activeOrder.dropAddress)}
-                      className="p-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-xs font-semibold transition-all"
-                    >
-                      <Navigation className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
             </div>
 
-            {/* ORDER ITEMS CHECKLIST */}
-            <div className="bg-slate-900/60 p-3.5 rounded-2xl border border-slate-700/50">
-              <span className="text-xs font-bold text-slate-400 block mb-2">Item Checklist:</span>
-              <div className="space-y-1.5">
+            {/* CHECKLIST */}
+            <div className="bg-[#121212] p-3 rounded-2xl border border-[#2a2a2a]">
+              <span className="text-[10px] font-bold text-gray-400 block mb-1.5 uppercase">Items to verify:</span>
+              <div className="space-y-1">
                 {activeOrder.items.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-xs text-slate-300">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  <div key={idx} className="flex items-center gap-2 text-xs text-gray-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#00b259] shrink-0" />
                     <span>{item}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* DYNAMIC ACTION BUTTON */}
+            {/* ACTION BUTTON */}
             <button
               onClick={handleNextStep}
-              className={`w-full py-4 rounded-2xl text-white font-black text-sm transition-all shadow-xl flex items-center justify-center gap-2 ${
-                STEPS[currentStep].color
-              }`}
+              className="w-full py-3.5 bg-[#00b259] hover:bg-[#009b4d] text-white font-extrabold text-xs rounded-2xl transition-all shadow-lg shadow-[#00b259]/20 flex items-center justify-center gap-2"
             >
               <span>{STEPS[currentStep].label}</span>
-              <ArrowRight className="w-4 h-4" />
+              <ChevronRight className="w-4 h-4" />
             </button>
           </section>
         )}
 
         {/* RECENT HISTORY */}
-        <section className="bg-slate-800/60 border border-slate-700/50 p-4 rounded-3xl space-y-3">
+        <section className="bg-[#1e1e1e] border border-[#2a2a2a] p-4 rounded-3xl space-y-3">
           <div className="flex justify-between items-center">
-            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Completed Today</h3>
-            <span className="text-xs text-slate-500">{recentHistory.length} orders</span>
+            <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider">Completed Today</h3>
+            <span className="text-[11px] text-gray-500">{recentHistory.length} deliveries</span>
           </div>
 
           {recentHistory.length === 0 ? (
-            <p className="text-xs text-slate-500 py-2">No completed deliveries yet today.</p>
+            <p className="text-xs text-gray-500 py-2">No completed deliveries yet.</p>
           ) : (
             <div className="space-y-2">
               {recentHistory.map((order, idx) => (
-                <div key={idx} className="flex justify-between items-center p-3 bg-slate-900/50 border border-slate-800 rounded-2xl text-xs">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400">
-                      <Store className="w-4 h-4" />
+                <div key={idx} className="flex justify-between items-center p-3 bg-[#121212] border border-[#2a2a2a] rounded-2xl text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-[#282828] flex items-center justify-center text-gray-400">
+                      <Store className="w-3.5 h-3.5 text-[#00b259]" />
                     </div>
                     <div>
                       <p className="font-bold text-white">{order.restaurant}</p>
-                      <p className="text-[10px] text-slate-500">{order.id} • {order.time}</p>
+                      <p className="text-[10px] text-gray-500">{order.id} • {order.time}</p>
                     </div>
                   </div>
-                  <span className="font-extrabold text-emerald-400 text-sm">+₹{order.amount}</span>
+                  <span className="font-extrabold text-[#00b259] text-xs">+₹{order.amount}</span>
                 </div>
               ))}
             </div>
           )}
         </section>
+
       </main>
     </div>
   );
