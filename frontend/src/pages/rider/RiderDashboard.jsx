@@ -9,7 +9,17 @@ import {
   Zap, 
   ChevronRight,
   ShieldCheck,
-  Star
+  Star,
+  User,
+  Settings,
+  LogOut,
+  X,
+  Edit2,
+  Check,
+  TrendingUp,
+  Bell,
+  Sliders,
+  DollarSign
 } from 'lucide-react';
 
 const STEPS = {
@@ -20,7 +30,22 @@ const STEPS = {
 };
 
 export default function RiderDashboard() {
+  // USER PROFILE & LOGIN STATE
+  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [profile, setProfile] = useState({
+    name: 'Alex Rivera',
+    phone: '+91 98765 43210',
+    monthlyRevenue: 28450,
+    monthlyRides: 142,
+  });
+  
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [tempProfile, setTempProfile] = useState({ ...profile });
+
+  // DASHBOARD CONTROL STATES
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [stats, setStats] = useState({ todayEarnings: 450, completedOrders: 5, rating: 4.9 });
   const [incomingOrder, setIncomingOrder] = useState(null);
   const [activeOrder, setActiveOrder] = useState(null);
@@ -30,6 +55,22 @@ export default function RiderDashboard() {
     { id: 'ORD-1075', restaurant: 'Pizza Paradise', amount: 120, time: '1 hour ago' },
   ]);
 
+  // PROFILE HANDLERS
+  const handleSaveProfile = () => {
+    setProfile({ ...tempProfile });
+    setIsEditingProfile(false);
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setIsProfileOpen(false);
+  };
+
+  const handleLogin = () => {
+    setIsLoggedIn(true);
+  };
+
+  // ORDER HANDLERS
   const handleAcceptOrder = () => {
     setActiveOrder(incomingOrder);
     setIncomingOrder(null);
@@ -48,6 +89,12 @@ export default function RiderDashboard() {
         ...prev,
         todayEarnings: prev.todayEarnings + activeOrder.payout,
         completedOrders: prev.completedOrders + 1,
+      }));
+
+      setProfile((prev) => ({
+        ...prev,
+        monthlyRevenue: prev.monthlyRevenue + activeOrder.payout,
+        monthlyRides: prev.monthlyRides + 1,
       }));
 
       setRecentHistory((prev) => [
@@ -92,18 +139,49 @@ export default function RiderDashboard() {
     });
   };
 
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-[#121212] text-white font-sans max-w-md mx-auto flex flex-col items-center justify-center p-6 border-x border-[#2a2a2a]">
+        <div className="w-16 h-16 rounded-full bg-[#1e1e1e] border border-[#333] flex items-center justify-center text-[#00b259] mb-4 shadow-xl">
+          <User className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold mb-1">Rider Logged Out</h2>
+        <p className="text-xs text-gray-400 mb-6 text-center">You have been signed out of your delivery session.</p>
+        <button
+          onClick={handleLogin}
+          className="w-full bg-[#00b259] hover:bg-[#009b4d] text-white py-3.5 rounded-2xl font-extrabold text-sm transition-all shadow-lg shadow-[#00b259]/20"
+        >
+          LOG IN TO DASHBOARD
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#121212] text-white font-sans max-w-md mx-auto pb-20 border-x border-[#2a2a2a]">
+    <div className="min-h-screen bg-[#121212] text-white font-sans max-w-md mx-auto pb-20 border-x border-[#2a2a2a] relative overflow-x-hidden">
       
       {/* HEADER */}
       <header className="sticky top-0 z-30 bg-[#121212]/95 backdrop-blur-md px-4 py-3.5 border-b border-[#242424] flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-[#1e1e1e] border border-[#333] flex items-center justify-center font-bold text-[#00b259]">
-            AX
-          </div>
+          {/* PROFILE BUTTON AT TOP LEFT CORNER */}
+          <button
+            onClick={() => {
+              setTempProfile({ ...profile });
+              setIsEditingProfile(false);
+              setIsProfileOpen(true);
+            }}
+            className="w-10 h-10 rounded-full bg-[#1e1e1e] border border-[#333] hover:border-[#00b259] flex items-center justify-center font-bold text-[#00b259] transition-all relative group"
+            title="Open Profile"
+          >
+            {profile.name.charAt(0).toUpperCase()}
+            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-[#00b259] rounded-full border-2 border-[#121212] flex items-center justify-center text-[8px] text-white">
+              <User className="w-2 h-2" />
+            </span>
+          </button>
+
           <div>
             <h1 className="text-sm font-bold text-white flex items-center gap-1">
-              Alex Rivera
+              {profile.name}
               <ShieldCheck className="w-3.5 h-3.5 text-[#00b259]" />
             </h1>
             <p className="text-[11px] text-gray-400">{isOnline ? 'Online & Ready' : 'Offline'}</p>
@@ -124,6 +202,136 @@ export default function RiderDashboard() {
         </button>
       </header>
 
+      {/* PROFILE SLIDE-OVER DRAWER */}
+      {isProfileOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end">
+          <div className="w-full max-w-xs bg-[#1e1e1e] h-full p-5 space-y-5 overflow-y-auto border-l border-[#2a2a2a] animate-in slide-in-from-right duration-200">
+            
+            {/* DRAWER HEADER */}
+            <div className="flex justify-between items-center pb-3 border-b border-[#2a2a2a]">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <User className="w-4 h-4 text-[#00b259]" /> Profile & Account
+              </h2>
+              <button
+                onClick={() => setIsProfileOpen(false)}
+                className="p-1.5 bg-[#282828] hover:bg-[#333] text-gray-400 hover:text-white rounded-full transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* EDIT PROFILE / VIEW PROFILE SECTION */}
+            <div className="bg-[#121212] p-4 rounded-2xl border border-[#2a2a2a] space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold text-[#00b259] uppercase tracking-wider">Personal Info</span>
+                {!isEditingProfile ? (
+                  <button
+                    onClick={() => setIsEditingProfile(true)}
+                    className="text-[11px] text-[#00b259] font-bold flex items-center gap-1 hover:underline"
+                  >
+                    <Edit2 className="w-3 h-3" /> Edit
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSaveProfile}
+                    className="text-[11px] text-[#00b259] font-bold flex items-center gap-1 hover:underline"
+                  >
+                    <Check className="w-3 h-3" /> Save
+                  </button>
+                )}
+              </div>
+
+              {!isEditingProfile ? (
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <span className="text-[10px] text-gray-500 block">Name</span>
+                    <p className="font-bold text-white">{profile.name}</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-gray-500 block">Phone Number</span>
+                    <p className="font-bold text-white">{profile.phone}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      value={tempProfile.name}
+                      onChange={(e) => setTempProfile({ ...tempProfile, name: e.target.value })}
+                      className="w-full bg-[#1e1e1e] border border-[#3a3a3a] rounded-xl p-2 text-white font-medium focus:outline-none focus:border-[#00b259]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">Phone Number</label>
+                    <input
+                      type="text"
+                      value={tempProfile.phone}
+                      onChange={(e) => setTempProfile({ ...tempProfile, phone: e.target.value })}
+                      className="w-full bg-[#1e1e1e] border border-[#3a3a3a] rounded-xl p-2 text-white font-medium focus:outline-none focus:border-[#00b259]"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* MONTHLY REVENUE & RIDES STATS */}
+            <div className="bg-[#121212] p-4 rounded-2xl border border-[#2a2a2a] space-y-3">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Monthly Earnings</span>
+              
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xl font-black text-[#00b259]">₹{profile.monthlyRevenue.toLocaleString()}</p>
+                  <p className="text-[10px] text-gray-500">This Month's Revenue</p>
+                </div>
+                <div className="p-2.5 bg-[#00b259]/10 border border-[#00b259]/20 rounded-xl">
+                  <TrendingUp className="w-5 h-5 text-[#00b259]" />
+                </div>
+              </div>
+
+              <div className="border-t border-[#222] pt-2.5 flex justify-between items-center text-xs">
+                <span className="text-gray-400">Total Monthly Rides:</span>
+                <span className="font-bold text-white">{profile.monthlyRides} rides</span>
+              </div>
+            </div>
+
+            {/* APP SETTINGS */}
+            <div className="bg-[#121212] p-4 rounded-2xl border border-[#2a2a2a] space-y-3">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block flex items-center gap-1.5">
+                <Settings className="w-3 h-3 text-[#00b259]" /> App Settings
+              </span>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-300 flex items-center gap-2">
+                  <Bell className="w-3.5 h-3.5 text-gray-400" /> Notifications
+                </span>
+                <button
+                  onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+                  className={`w-9 h-5 rounded-full p-0.5 transition-all ${
+                    notificationsEnabled ? 'bg-[#00b259]' : 'bg-[#333]'
+                  }`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-all ${
+                    notificationsEnabled ? 'translate-x-4' : 'translate-x-0'
+                  }`} />
+                </button>
+              </div>
+            </div>
+
+            {/* LOGOUT BUTTON */}
+            <button
+              onClick={handleLogout}
+              className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Log Out</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* DASHBOARD CONTENT */}
       <main className="p-4 space-y-4">
         
         {/* DEV TEST TRIGGER */}
@@ -249,8 +457,6 @@ export default function RiderDashboard() {
 
             {/* ROUTE LIST */}
             <div className="space-y-3 pt-1">
-              
-              {/* PICKUP LOCATION */}
               <div className="bg-[#121212] p-3 rounded-2xl border border-[#2a2a2a] flex justify-between items-start">
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-bold text-[#00b259] uppercase">1. Pickup Restaurant</span>
@@ -265,7 +471,6 @@ export default function RiderDashboard() {
                 </button>
               </div>
 
-              {/* DROPOFF LOCATION */}
               <div className="bg-[#121212] p-3 rounded-2xl border border-[#2a2a2a] flex justify-between items-start">
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-bold text-[#00b259] uppercase">2. Customer Dropoff</span>
@@ -287,7 +492,6 @@ export default function RiderDashboard() {
                   </button>
                 </div>
               </div>
-
             </div>
 
             {/* CHECKLIST */}
