@@ -21,8 +21,6 @@ export const LocationProvider = ({ children }) => {
     house_no: '',
     address: 'Select Location',
     city: '',
-    pincode: '',
-    phone: '',
     latitude: null,
     longitude: null,
   };
@@ -31,24 +29,35 @@ export const LocationProvider = ({ children }) => {
   const [activeAddress, setActiveAddress] = useState(defaultActiveAddress);
 
   const fetchCustomerAddresses = async () => {
-    if (!token) return;
+  if (!token) return;
 
-    try {
-      const response = await apiFetch('/api/addresses', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+  try {
+    const response = await apiFetch('/api/addresses', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
-      if (!response.ok) return;
+    if (!response.ok) return;
 
-      const data = await response.json();
-      if (Array.isArray(data) && data.length > 0) {
-        setAddresses(data);
-        setActiveAddress(data[0]);
-      }
-    } catch (error) {
-      console.warn('Backend API fetch error:', error);
+    const data = await response.json();
+    if (Array.isArray(data) && data.length > 0) {
+      // Map API fields to UI field names
+      const normalizedData = data.map((item) => ({
+        id: item.id || item.address_id,
+        tag: item.tag || item.address_type || 'Home',
+        house_no: item.house_no || '',
+        address: item.address || item.formatted_address,
+        city: item.city || '',
+        latitude: item.latitude || item.lat,
+        longitude: item.longitude || item.lng,
+      }));
+
+      setAddresses(normalizedData);
+      setActiveAddress(normalizedData[0]);
     }
-  };
+  } catch (error) {
+    console.warn('Backend API fetch error:', error);
+  }
+};
 
   useEffect(() => {
     if (loading) return;
@@ -62,50 +71,48 @@ export const LocationProvider = ({ children }) => {
   }, [token, loading]);
 
   const addAddress = async (newAddr) => {
-    if (!newAddr || !newAddr.address) return false;
+  if (!newAddr || !newAddr.address) return false;
 
-    // Ensure all required fields have fallbacks before sending
-    const payload = {
-      address: newAddr.address,
-      house_no: newAddr.house_no || '',
-      city: newAddr.city || 'Default City',
-      pincode: newAddr.pincode || '000000',
-      phone: newAddr.phone || '0000000000',
-      tag: newAddr.tag || 'Home',
-      latitude: newAddr.latitude || newAddr.lat || null,
-      longitude: newAddr.longitude || newAddr.lng || null,
-      place_id: newAddr.place_id || null,
-      is_default: newAddr.is_default || false,
-    };
-
-    if (token) {
-      try {
-        const response = await apiFetch('/api/addresses', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (response.ok) {
-          const saved = await response.json();
-          setAddresses((prev) => [saved, ...prev]);
-          setActiveAddress(saved);
-          return true;
-        }
-      } catch (err) {
-        console.error('Failed to persist address:', err);
-      }
-    }
-
-    // Fallback local addition if unauthenticated or request fails
-    const tempAddr = { ...payload, id: Date.now() };
-    setAddresses((prev) => [tempAddr, ...prev]);
-    setActiveAddress(tempAddr);
-    return true;
+  const payload = {
+    ...newAddr,
+    address_type: newAddr.tag || newAddr.address_type || 'Home',
+    lat: newAddr.latitude,
+    lng: newAddr.longitude,
   };
+
+  if (token) {
+    try {
+      const response = await apiFetch('/api/addresses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        const saved = await response.json();
+        const normalized = {
+          ...saved,
+          tag: saved.tag || saved.address_type || 'Home',
+          latitude: saved.latitude || saved.lat,
+          longitude: saved.longitude || saved.lng,
+        };
+        setAddresses((prev) => [normalized, ...prev]);
+        setActiveAddress(normalized);
+        return true;
+      }
+    } catch (err) {
+      console.error('Failed to persist address:', err);
+    }
+  }
+
+  const tempAddr = { ...payload, id: Date.now() };
+  setAddresses((prev) => [tempAddr, ...prev]);
+  setActiveAddress(tempAddr);
+  return true;
+};
 
   const deleteAddress = async (id) => {
     if (token) {
