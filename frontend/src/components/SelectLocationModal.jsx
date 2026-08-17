@@ -53,57 +53,62 @@ export default function SelectLocationModal({ onClose }) {
   }, [showAddForm]);
 
   // 1. "Use current location": Reverse geocodes coordinates and saves address
-  const handleUseCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
-      return;
-    }
+ const handleUseCurrentLocation = () => {
+  if (!navigator.geolocation) {
+    alert('Geolocation is not supported by your browser.');
+    return;
+  }
 
-    setLoadingCurrent(true);
+  setLoadingCurrent(true);
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const latitude = position.coords.latitude;
-        const longitude = position.coords.longitude;
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
 
-        if (window.google) {
-          const geocoder = new window.google.maps.Geocoder();
-          geocoder.geocode(
-            { location: { lat: latitude, lng: longitude } },
-            async (results, status) => {
-              if (status === 'OK' && results[0]) {
-                const currentAddrText = results[0].formatted_address;
+      if (window.google) {
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode(
+          { location: { lat: latitude, lng: longitude } },
+          async (results, status) => {
+            if (status === 'OK' && results[0]) {
+              const currentAddrText = results[0].formatted_address;
 
-                let currentCity = '';
-                const cityComp = results[0].address_components.find((c) =>
-                  c.types.includes('locality')
-                );
-                if (cityComp) currentCity = cityComp.long_name;
+              let currentCity = '';
+              const cityComp = results[0].address_components.find(
+                (c) =>
+                  c.types.includes('locality') ||
+                  c.types.includes('administrative_area_level_2') ||
+                  c.types.includes('administrative_area_level_1')
+              );
+              if (cityComp) currentCity = cityComp.long_name;
 
-                await addAddress({
-                  tag: 'Current Location',
-                  house_no: '',
-                  address: currentAddrText,
-                  city: currentCity,
-                  latitude,
-                  longitude,
-                });
-              }
-              setLoadingCurrent(false);
-              if (onClose) onClose();
+              // Ensure both tag and address_type are supplied
+              await addAddress({
+                tag: 'Current Location',
+                address_type: 'Current Location',
+                house_no: '',
+                address: currentAddrText,
+                city: currentCity || 'Ahmedabad', // Fallback to avoid database null defaults
+                latitude: latitude,
+                longitude: longitude,
+              });
             }
-          );
-        } else {
-          setLoadingCurrent(false);
-        }
-      },
-      (error) => {
-        console.error('Error fetching position:', error);
+            setLoadingCurrent(false);
+            if (onClose) onClose();
+          }
+        );
+      } else {
         setLoadingCurrent(false);
-        alert('Unable to retrieve current location.');
       }
-    );
-  };
+    },
+    (error) => {
+      console.error('Error fetching position:', error);
+      setLoadingCurrent(false);
+      alert('Unable to retrieve current location.');
+    }
+  );
+};
 
   // 2. Save manual/autocomplete address
   const handleSaveAddress = async (e) => {
