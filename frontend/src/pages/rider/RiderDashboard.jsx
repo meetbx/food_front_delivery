@@ -27,22 +27,22 @@ const STEPS = {
   PICKED_UP: { label: 'Arrived at Customer', next: 'ARRIVED_CUSTOMER', stepNum: 3 },
   ARRIVED_CUSTOMER: { label: 'Complete Delivery', next: 'DELIVERED', stepNum: 4 },
 };
+
 const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-rwor.onrender.com';
+
 export default function RiderDashboard() {
-  // USER PROFILE & LOGIN STATE
   const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [profile, setProfile] = useState({
+    id: 1, // Explicit rider ID matching backend
     name: 'Alex Rivera',
     phone: '+91 98765 43210',
     monthlyRevenue: 28450,
     monthlyRides: 142,
   });
 
-  
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [tempProfile, setTempProfile] = useState({ ...profile });
 
-  // DASHBOARD CONTROL STATES
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -54,28 +54,29 @@ export default function RiderDashboard() {
     { id: 'ORD-1080', restaurant: 'Burger King', amount: 80, time: '20 mins ago' },
     { id: 'ORD-1075', restaurant: 'Pizza Paradise', amount: 120, time: '1 hour ago' },
   ]);
-  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    // Only set up socket if user is logged in
     if (!isLoggedIn) return;
 
     // Connect to backend Socket.IO server
     const newSocket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
+      reconnection: true,
     });
-    setSocket(newSocket);
 
-    // Get current rider ID (or pass rider object from props/auth context)
-    const riderId = profile.id || 1; // Replace 1 with dynamic rider ID after login
+    const riderId = profile.id || 1;
 
-    // Register rider into their private room (matches socket.on('register_rider') in initSocket)
-    newSocket.emit('register_rider', { riderId });
+    // Register room on connection
+    newSocket.on('connect', () => {
+      console.log('⚡ Socket connected! ID:', newSocket.id);
+      newSocket.emit('register_rider', { riderId });
+    });
 
-    // Listen for live customer orders broadcast from backend
+    // Listen for incoming order offers
     newSocket.on('new_order_offer', (orderData) => {
+      console.log('📦 New Order Offer Received:', orderData);
       if (isOnline && !activeOrder) {
-        setIncomingOrder(orderData); // Automatically shows popup modal
+        setIncomingOrder(orderData);
       }
     });
 
@@ -95,17 +96,17 @@ export default function RiderDashboard() {
           (err) => console.error('GPS tracking error:', err.message),
           { enableHighAccuracy: true }
         );
-      }, 10000); // Sends update every 10 seconds
+      }, 10000);
     }
 
-    // Cleanup on unmount or logout
     return () => {
       if (locationInterval) clearInterval(locationInterval);
+      newSocket.off('connect');
       newSocket.off('new_order_offer');
       newSocket.disconnect();
     };
   }, [isLoggedIn, isOnline, activeOrder, profile.id]);
-  // PROFILE HANDLERS
+
   const handleSaveProfile = () => {
     setProfile({ ...tempProfile });
     setIsEditingProfile(false);
@@ -120,7 +121,6 @@ export default function RiderDashboard() {
     setIsLoggedIn(true);
   };
 
-  // ORDER HANDLERS
   const handleAcceptOrder = () => {
     setActiveOrder(incomingOrder);
     setIncomingOrder(null);
@@ -137,13 +137,13 @@ export default function RiderDashboard() {
     if (stepConfig.next === 'DELIVERED') {
       setStats((prev) => ({
         ...prev,
-        todayEarnings: prev.todayEarnings + activeOrder.payout,
+        todayEarnings: prev.todayEarnings + (activeOrder.payout || 0),
         completedOrders: prev.completedOrders + 1,
       }));
 
       setProfile((prev) => ({
         ...prev,
-        monthlyRevenue: prev.monthlyRevenue + activeOrder.payout,
+        monthlyRevenue: prev.monthlyRevenue + (activeOrder.payout || 0),
         monthlyRides: prev.monthlyRides + 1,
       }));
 
@@ -209,11 +209,8 @@ export default function RiderDashboard() {
 
   return (
     <div className="min-h-screen bg-[#121212] text-white font-sans max-w-md mx-auto pb-20 border-x border-[#2a2a2a] relative overflow-x-hidden">
-      
-      {/* HEADER */}
       <header className="sticky top-0 z-30 bg-[#121212]/95 backdrop-blur-md px-4 py-3.5 border-b border-[#242424] flex justify-between items-center">
         <div className="flex items-center gap-3">
-          {/* PROFILE BUTTON AT TOP LEFT CORNER */}
           <button
             onClick={() => {
               setTempProfile({ ...profile });
@@ -238,7 +235,6 @@ export default function RiderDashboard() {
           </div>
         </div>
 
-        {/* ONLINE / OFFLINE TOGGLE */}
         <button
           onClick={() => setIsOnline(!isOnline)}
           className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${
@@ -252,12 +248,9 @@ export default function RiderDashboard() {
         </button>
       </header>
 
-      {/* PROFILE SLIDE-OVER DRAWER */}
       {isProfileOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end">
           <div className="w-full max-w-xs bg-[#1e1e1e] h-full p-5 space-y-5 overflow-y-auto border-l border-[#2a2a2a] animate-in slide-in-from-right duration-200">
-            
-            {/* DRAWER HEADER */}
             <div className="flex justify-between items-center pb-3 border-b border-[#2a2a2a]">
               <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                 <User className="w-4 h-4 text-[#00b259]" /> Profile & Account
@@ -270,7 +263,6 @@ export default function RiderDashboard() {
               </button>
             </div>
 
-            {/* EDIT PROFILE / VIEW PROFILE SECTION */}
             <div className="bg-[#121212] p-4 rounded-2xl border border-[#2a2a2a] space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-[10px] font-bold text-[#00b259] uppercase tracking-wider">Personal Info</span>
@@ -326,10 +318,8 @@ export default function RiderDashboard() {
               )}
             </div>
 
-            {/* MONTHLY REVENUE & RIDES STATS */}
             <div className="bg-[#121212] p-4 rounded-2xl border border-[#2a2a2a] space-y-3">
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Monthly Earnings</span>
-              
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xl font-black text-[#00b259]">₹{profile.monthlyRevenue.toLocaleString()}</p>
@@ -346,7 +336,6 @@ export default function RiderDashboard() {
               </div>
             </div>
 
-            {/* APP SETTINGS */}
             <div className="bg-[#121212] p-4 rounded-2xl border border-[#2a2a2a] space-y-3">
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Settings className="w-3 h-3 text-[#00b259]" /> App Settings
@@ -369,7 +358,6 @@ export default function RiderDashboard() {
               </div>
             </div>
 
-            {/* LOGOUT BUTTON */}
             <button
               onClick={handleLogout}
               className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all"
@@ -381,10 +369,7 @@ export default function RiderDashboard() {
         </div>
       )}
 
-      {/* DASHBOARD CONTENT */}
       <main className="p-4 space-y-4">
-        
-        {/* DEV TEST TRIGGER */}
         {!incomingOrder && !activeOrder && isOnline && (
           <button
             onClick={triggerSimulatedOrder}
@@ -395,7 +380,6 @@ export default function RiderDashboard() {
           </button>
         )}
 
-        {/* DAILY STATS CARDS */}
         <section className="grid grid-cols-3 gap-2.5">
           <div className="bg-[#1e1e1e] border border-[#2a2a2a] p-3 rounded-2xl text-center">
             <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Earnings</span>
@@ -416,7 +400,6 @@ export default function RiderDashboard() {
           </div>
         </section>
 
-        {/* INCOMING ORDER OFFER MODAL */}
         {incomingOrder && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end justify-center p-4">
             <div className="w-full max-w-md bg-[#1e1e1e] border border-[#333] rounded-3xl p-5 space-y-4 shadow-2xl animate-in slide-in-from-bottom duration-200">
@@ -433,7 +416,6 @@ export default function RiderDashboard() {
                 </div>
               </div>
 
-              {/* ROUTE PREVIEW */}
               <div className="bg-[#121212] p-3.5 rounded-2xl border border-[#2a2a2a] space-y-3">
                 <div className="flex items-start gap-2.5">
                   <Store className="w-4 h-4 text-[#00b259] mt-0.5 shrink-0" />
@@ -446,13 +428,12 @@ export default function RiderDashboard() {
                 <div className="flex items-start gap-2.5">
                   <MapPin className="w-4 h-4 text-[#00b259] mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-[10px] text-gray-400 font-medium">Dropoff ({incomingOrder.distance})</p>
+                    <p className="text-[10px] text-gray-400 font-medium">Dropoff ({incomingOrder.distance || '2.5 km'})</p>
                     <p className="text-xs font-semibold text-gray-200 line-clamp-1">{incomingOrder.dropAddress}</p>
                   </div>
                 </div>
               </div>
 
-              {/* ACTION BUTTONS */}
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <button
                   onClick={handleDeclineOrder}
@@ -471,11 +452,8 @@ export default function RiderDashboard() {
           </div>
         )}
 
-        {/* ACTIVE ORDER CARD */}
         {activeOrder && (
           <section className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-3xl p-4 space-y-4">
-            
-            {/* HEADER */}
             <div className="flex justify-between items-center pb-3 border-b border-[#2a2a2a]">
               <div>
                 <span className="text-[10px] font-bold text-[#00b259] uppercase tracking-wider block">Active Order</span>
@@ -487,7 +465,6 @@ export default function RiderDashboard() {
               </div>
             </div>
 
-            {/* STEP PROGRESS BAR */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-[11px] text-gray-400 font-medium">
                 <span>Progress</span>
@@ -505,7 +482,6 @@ export default function RiderDashboard() {
               </div>
             </div>
 
-            {/* ROUTE LIST */}
             <div className="space-y-3 pt-1">
               <div className="bg-[#121212] p-3 rounded-2xl border border-[#2a2a2a] flex justify-between items-start">
                 <div className="space-y-0.5">
@@ -524,12 +500,12 @@ export default function RiderDashboard() {
               <div className="bg-[#121212] p-3 rounded-2xl border border-[#2a2a2a] flex justify-between items-start">
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-bold text-[#00b259] uppercase">2. Customer Dropoff</span>
-                  <p className="text-xs font-bold text-white">{activeOrder.customerName}</p>
+                  <p className="text-xs font-bold text-white">{activeOrder.customerName || 'Customer'}</p>
                   <p className="text-[11px] text-gray-400 line-clamp-1">{activeOrder.dropAddress}</p>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <a
-                    href={`tel:${activeOrder.customerPhone}`}
+                    href={`tel:${activeOrder.customerPhone || ''}`}
                     className="p-2 bg-[#282828] text-white hover:bg-[#333] border border-[#3a3a3a] rounded-xl transition-all"
                   >
                     <Phone className="w-3.5 h-3.5 text-[#00b259]" />
@@ -544,11 +520,10 @@ export default function RiderDashboard() {
               </div>
             </div>
 
-            {/* CHECKLIST */}
             <div className="bg-[#121212] p-3 rounded-2xl border border-[#2a2a2a]">
               <span className="text-[10px] font-bold text-gray-400 block mb-1.5 uppercase">Items to verify:</span>
               <div className="space-y-1">
-                {activeOrder.items.map((item, idx) => (
+                {activeOrder.items && activeOrder.items.map((item, idx) => (
                   <div key={idx} className="flex items-center gap-2 text-xs text-gray-300">
                     <CheckCircle2 className="w-3.5 h-3.5 text-[#00b259] shrink-0" />
                     <span>{item}</span>
@@ -557,7 +532,6 @@ export default function RiderDashboard() {
               </div>
             </div>
 
-            {/* ACTION BUTTON */}
             <button
               onClick={handleNextStep}
               className="w-full py-3.5 bg-[#00b259] hover:bg-[#009b4d] text-white font-extrabold text-xs rounded-2xl transition-all shadow-lg shadow-[#00b259]/20 flex items-center justify-center gap-2"
@@ -568,7 +542,6 @@ export default function RiderDashboard() {
           </section>
         )}
 
-        {/* RECENT HISTORY */}
         <section className="bg-[#1e1e1e] border border-[#2a2a2a] p-4 rounded-3xl space-y-3">
           <div className="flex justify-between items-center">
             <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider">Completed Today</h3>
@@ -596,7 +569,6 @@ export default function RiderDashboard() {
             </div>
           )}
         </section>
-
       </main>
     </div>
   );
