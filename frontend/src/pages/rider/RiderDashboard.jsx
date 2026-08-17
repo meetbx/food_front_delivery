@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Navigation, 
   Phone, 
@@ -17,10 +17,9 @@ import {
   Edit2,
   Check,
   TrendingUp,
-  Bell,
-  Sliders,
-  DollarSign
+  Bell
 } from 'lucide-react';
+import { io } from 'socket.io-client';
 
 const STEPS = {
   ACCEPTED: { label: 'Arrived at Restaurant', next: 'ARRIVED_RESTAURANT', stepNum: 1 },
@@ -124,7 +123,7 @@ export default function RiderDashboard() {
   const triggerSimulatedOrder = () => {
     setIncomingOrder({
       id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-      restaurantName: 'Domino\'s Pizza',
+      restaurantName: "Domino's Pizza",
       pickupAddress: 'MG Road, Sector 14, Near City Mall',
       restaurantLat: 23.0225,
       restaurantLng: 72.5714,
@@ -298,7 +297,7 @@ export default function RiderDashboard() {
 
             {/* APP SETTINGS */}
             <div className="bg-[#121212] p-4 rounded-2xl border border-[#2a2a2a] space-y-3">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Settings className="w-3 h-3 text-[#00b259]" /> App Settings
               </span>
 
