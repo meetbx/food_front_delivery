@@ -27,7 +27,7 @@ const STEPS = {
   PICKED_UP: { label: 'Arrived at Customer', next: 'ARRIVED_CUSTOMER', stepNum: 3 },
   ARRIVED_CUSTOMER: { label: 'Complete Delivery', next: 'DELIVERED', stepNum: 4 },
 };
-
+const SOCKET_URL = 'http://localhost:5000';
 export default function RiderDashboard() {
   // USER PROFILE & LOGIN STATE
   const [isLoggedIn, setIsLoggedIn] = useState(true);
@@ -37,6 +37,7 @@ export default function RiderDashboard() {
     monthlyRevenue: 28450,
     monthlyRides: 142,
   });
+
   
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [tempProfile, setTempProfile] = useState({ ...profile });
@@ -53,7 +54,57 @@ export default function RiderDashboard() {
     { id: 'ORD-1080', restaurant: 'Burger King', amount: 80, time: '20 mins ago' },
     { id: 'ORD-1075', restaurant: 'Pizza Paradise', amount: 120, time: '1 hour ago' },
   ]);
+  const [socket, setSocket] = useState(null);
 
+  useEffect(() => {
+    // Only set up socket if user is logged in
+    if (!isLoggedIn) return;
+
+    // Connect to backend Socket.IO server
+    const newSocket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+    });
+    setSocket(newSocket);
+
+    // Get current rider ID (or pass rider object from props/auth context)
+    const riderId = profile.id || 1; // Replace 1 with dynamic rider ID after login
+
+    // Register rider into their private room (matches socket.on('register_rider') in initSocket)
+    newSocket.emit('register_rider', { riderId });
+
+    // Listen for live customer orders broadcast from backend
+    newSocket.on('new_order_offer', (orderData) => {
+      if (isOnline && !activeOrder) {
+        setIncomingOrder(orderData); // Automatically shows popup modal
+      }
+    });
+
+    // Send real-time GPS coordinates periodically
+    let locationInterval;
+    if (navigator.geolocation) {
+      locationInterval = setInterval(() => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            newSocket.emit('send_rider_location', {
+              riderId,
+              orderId: activeOrder?.id || null,
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            });
+          },
+          (err) => console.error('GPS tracking error:', err.message),
+          { enableHighAccuracy: true }
+        );
+      }, 10000); // Sends update every 10 seconds
+    }
+
+    // Cleanup on unmount or logout
+    return () => {
+      if (locationInterval) clearInterval(locationInterval);
+      newSocket.off('new_order_offer');
+      newSocket.disconnect();
+    };
+  }, [isLoggedIn, isOnline, activeOrder, profile.id]);
   // PROFILE HANDLERS
   const handleSaveProfile = () => {
     setProfile({ ...tempProfile });
