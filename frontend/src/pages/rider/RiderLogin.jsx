@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useRiderAuth } from '../../context/RiderAuthContext';
-import { apiFetch } from '../../config'; // Import apiFetch
+import { apiFetch } from '../config'; 
 
 export default function RiderLogin() {
   const navigate = useNavigate();
@@ -27,7 +27,6 @@ export default function RiderLogin() {
     setLoading(true);
 
     try {
-      // Connect to real backend endpoint using apiFetch
       const res = await apiFetch('/api/rider/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
