@@ -27,7 +27,7 @@ const STEPS = {
   PICKED_UP: { label: 'Arrived at Customer', next: 'ARRIVED_CUSTOMER', stepNum: 3 },
   ARRIVED_CUSTOMER: { label: 'Complete Delivery', next: 'DELIVERED', stepNum: 4 },
 };
-const SOCKET_URL = 'http://localhost:5000';
+const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-rwor.onrender.com';
 export default function RiderDashboard() {
   // USER PROFILE & LOGIN STATE
   const [isLoggedIn, setIsLoggedIn] = useState(true);
