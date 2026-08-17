@@ -33,7 +33,7 @@ const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-r
 export default function RiderDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [profile, setProfile] = useState({
-    id: 1, // Explicit rider ID matching backend
+    id: 1, // Explicit rider/driver ID matching backend
     name: 'Alex Rivera',
     phone: '+91 98765 43210',
     monthlyRevenue: 28450,
@@ -66,18 +66,38 @@ export default function RiderDashboard() {
 
     const riderId = profile.id || 1;
 
-    // Register room on connection
+    // Register room immediately on connection
     newSocket.on('connect', () => {
       console.log('⚡ Socket connected! ID:', newSocket.id);
-      newSocket.emit('register_rider', { riderId });
+      // Emit both riderId and driverId to cover both room key conventions
+      newSocket.emit('register_rider', { riderId, driverId: riderId });
+      console.log(`📡 Registered rider/driver room for ID: ${riderId}`);
     });
 
-    // Listen for incoming order offers
+    // Listen for incoming order offers from backend
     newSocket.on('new_order_offer', (orderData) => {
       console.log('📦 New Order Offer Received:', orderData);
-      if (isOnline && !activeOrder) {
-        setIncomingOrder(orderData);
-      }
+      
+      if (!isOnline || activeOrder) return;
+
+      // Normalize backend order structure to prevent missing fields
+      const normalizedOrder = {
+        id: orderData.id || orderData.orderId || `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
+        restaurantName: orderData.restaurantName || orderData.restaurant || "Partner Restaurant",
+        pickupAddress: orderData.pickupAddress || orderData.restaurantAddress || 'Pickup Location',
+        restaurantLat: orderData.restaurantLat || orderData.pickupLat || null,
+        restaurantLng: orderData.restaurantLng || orderData.pickupLng || null,
+        customerName: orderData.customerName || orderData.userName || 'Customer',
+        customerPhone: orderData.customerPhone || orderData.userPhone || '+91 98765 43210',
+        dropAddress: orderData.dropAddress || orderData.deliveryAddress || 'Delivery Address',
+        customerLat: orderData.customerLat || orderData.dropLat || null,
+        customerLng: orderData.customerLng || orderData.dropLng || null,
+        items: orderData.items || ['1x Order Items'],
+        payout: orderData.payout || orderData.totalPayout || 85,
+        distance: orderData.distance || '2.5 km',
+      };
+
+      setIncomingOrder(normalizedOrder);
     });
 
     // Send real-time GPS coordinates periodically
@@ -88,6 +108,7 @@ export default function RiderDashboard() {
           (pos) => {
             newSocket.emit('send_rider_location', {
               riderId,
+              driverId: riderId,
               orderId: activeOrder?.id || null,
               lat: pos.coords.latitude,
               lng: pos.coords.longitude,
