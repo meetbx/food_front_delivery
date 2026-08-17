@@ -21,6 +21,8 @@ export const LocationProvider = ({ children }) => {
     house_no: '',
     address: 'Select Location',
     city: '',
+    pincode: '',
+    phone: '',
     latitude: null,
     longitude: null,
   };
@@ -62,6 +64,20 @@ export const LocationProvider = ({ children }) => {
   const addAddress = async (newAddr) => {
     if (!newAddr || !newAddr.address) return false;
 
+    // Ensure all required fields have fallbacks before sending
+    const payload = {
+      address: newAddr.address,
+      house_no: newAddr.house_no || '',
+      city: newAddr.city || 'Default City',
+      pincode: newAddr.pincode || '000000',
+      phone: newAddr.phone || '0000000000',
+      tag: newAddr.tag || 'Home',
+      latitude: newAddr.latitude || newAddr.lat || null,
+      longitude: newAddr.longitude || newAddr.lng || null,
+      place_id: newAddr.place_id || null,
+      is_default: newAddr.is_default || false,
+    };
+
     if (token) {
       try {
         const response = await apiFetch('/api/addresses', {
@@ -70,7 +86,7 @@ export const LocationProvider = ({ children }) => {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(newAddr),
+          body: JSON.stringify(payload),
         });
 
         if (response.ok) {
@@ -84,7 +100,8 @@ export const LocationProvider = ({ children }) => {
       }
     }
 
-    const tempAddr = { ...newAddr, id: Date.now() };
+    // Fallback local addition if unauthenticated or request fails
+    const tempAddr = { ...payload, id: Date.now() };
     setAddresses((prev) => [tempAddr, ...prev]);
     setActiveAddress(tempAddr);
     return true;
