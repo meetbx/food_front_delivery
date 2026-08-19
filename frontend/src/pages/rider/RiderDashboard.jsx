@@ -63,12 +63,20 @@ export default function RiderDashboard() {
       transports: ['websocket', 'polling']
     });
 
-    socket.on('connect', () => {
-      console.log('[RIDER DASHBOARD] Socket Connected. ID:', socket.id);
-      const riderId = profile.id || 1;
-      // Register into personal socket rooms
-      socket.emit('register_rider', { riderId: riderId, driverId: riderId });
-    });
+socket.on('connect', () => {
+  // Use actual authenticated rider/driver ID from localStorage or auth context
+  const uniqueRiderId = profile?.id || localStorage.getItem('driverId');
+  
+  if (!uniqueRiderId) {
+    console.error('No valid rider ID found. Skipping room registration.');
+    return;
+  }
+
+  socket.emit('register_rider', { 
+    riderId: uniqueRiderId, 
+    driverId: uniqueRiderId 
+  });
+});
     // INSERT HERE: Continuous GPS location tracker
   let watchId = null;
   if ('geolocation' in navigator) {
