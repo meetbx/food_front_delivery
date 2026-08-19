@@ -57,15 +57,18 @@ export default function RiderDashboard() {
 
   // Handle Real-Time Socket Connections & Order Broadcast Listener
   // RiderDashboard.jsx
+// RiderDashboard.jsx
 useEffect(() => {
   if (!isOnline) return;
 
   const socket = io(SOCKET_URL, {
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionAttempts: 5
   });
 
   socket.on('connect', () => {
-    // Register rider using their actual ID
+    console.log('⚡ Socket connected:', socket.id);
     socket.emit('register_rider', { 
       riderId: profile.id, 
       driverId: profile.id 
@@ -78,8 +81,8 @@ useEffect(() => {
     watchId = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude, longitude, heading } = position.coords;
-        
-        // This puts the rider into Redis Geo Index at their current location
+        console.log('📍 Location emitted:', latitude, longitude);
+
         socket.emit('send_rider_location', {
           riderId: profile.id,
           driverId: profile.id,
@@ -88,8 +91,24 @@ useEffect(() => {
           heading: heading || 0
         });
       },
-      (error) => console.error('[GEOLOCATION ERROR]:', error.message),
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 5000 }
+      (error) => {
+        console.warn('[GEOLOCATION WARNING]:', error.message);
+        // Fallback single update if watchPosition struggles
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            socket.emit('send_rider_location', {
+              riderId: profile.id,
+              driverId: profile.id,
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              heading: pos.coords.heading || 0
+            });
+          },
+          (err) => console.error('[GEOLOCATION ERROR]:', err.message),
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+        );
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 } // Disabling high accuracy stops DevTools sensor timeouts
     );
   }
 
@@ -107,7 +126,7 @@ useEffect(() => {
     socket.off('new_delivery_assignment', handleNewOffer);
     socket.disconnect();
   };
-}, [isOnline, profile.id]);
+}, [isOnline]); // ⚠️ Keep profile.id OUT of dependencies to avoid infinite reconnect cycles
 
   const handleProfileSave = () => {
     setProfile(editForm);
