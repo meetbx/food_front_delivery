@@ -69,7 +69,26 @@ export default function RiderDashboard() {
       // Register into personal socket rooms
       socket.emit('register_rider', { riderId: riderId, driverId: riderId });
     });
-
+    // INSERT HERE: Continuous GPS location tracker
+  let watchId = null;
+  if ('geolocation' in navigator) {
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude, heading } = position.coords;
+        
+        socket.emit('send_rider_location', {
+          orderId: activeDelivery ? activeDelivery.id : null,
+          riderId: profile.id,
+          driverId: profile.id,
+          lat: latitude,
+          lng: longitude,
+          heading: heading || 0
+        });
+      },
+      (error) => console.error('[GEOLOCATION ERROR]:', error.message),
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
+    );
+  }
     const handleNewOffer = (data) => {
       console.log('[RIDER DASHBOARD] Received new order offer broadcast:', data);
       
@@ -93,12 +112,13 @@ export default function RiderDashboard() {
     socket.on('new_order_offer', handleNewOffer);
     socket.on('new_delivery_assignment', handleNewOffer);
 
-    return () => {
-      socket.off('new_order_offer', handleNewOffer);
-      socket.off('new_delivery_assignment', handleNewOffer);
-      socket.disconnect();
-    };
-  }, [isOnline, profile.id]);
+return () => {
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    socket.off('new_order_offer', handleNewOffer);
+    socket.off('new_delivery_assignment', handleNewOffer);
+    socket.disconnect();
+  };
+}, [isOnline, profile.id, activeDelivery]);
 
   const handleProfileSave = () => {
     setProfile(editForm);
