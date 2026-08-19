@@ -114,7 +114,8 @@ useEffect(() => {
 
   const handleNewOffer = (data) => {
     console.log('[RIDER DASHBOARD] Received offer:', data);
-    setIncomingOffer(data);
+      const offerData = data.order || data; 
+      setIncomingOffer(offerData);
   };
 
   socket.on('new_order_offer', handleNewOffer);
