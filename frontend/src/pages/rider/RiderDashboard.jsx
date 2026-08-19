@@ -77,20 +77,27 @@ export default function RiderDashboard() {
   };
 
   // Fallback REST check to catch offers missed during socket drops
-  const fetchPendingOffers = async () => {
-    try {
-      const res = await fetch(`${SOCKET_URL}/api/orders/pending-offers?driverId=${profile.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && (Array.isArray(data) ? data.length > 0 : data.id)) {
-          const offer = Array.isArray(data) ? data[0] : data;
-          handleNewOffer(offer);
-        }
-      }
-    } catch (err) {
-      console.warn('Could not fetch pending offers:', err.message);
+ const fetchPendingOffers = async () => {
+  if (!profile?.id) return;
+
+  try {
+    const res = await fetch(`${SOCKET_URL}/api/orders/pending-offers?driverId=${profile.id}`);
+
+    if (!res.ok) {
+      console.warn(`[PENDING OFFERS API]: Server responded with status ${res.status}`);
+      return;
     }
-  };
+
+    const result = await res.json();
+    const offerData = result?.data;
+
+    if (offerData) {
+      handleNewOffer(offerData);
+    }
+  } catch (err) {
+    console.warn('[PENDING OFFERS API WARNING]:', err.message);
+  }
+};
 
   useEffect(() => {
     if (!isOnline) return;
