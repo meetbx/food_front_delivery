@@ -56,36 +56,31 @@ export default function RiderDashboard() {
   ]);
 
   // Handle Real-Time Socket Connections & Order Broadcast Listener
-  useEffect(() => {
-    if (!isOnline) return;
+  // RiderDashboard.jsx
+useEffect(() => {
+  if (!isOnline) return;
 
-    const socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling']
-    });
-
-socket.on('connect', () => {
-  // Use actual authenticated rider/driver ID from localStorage or auth context
-  const uniqueRiderId = profile?.id || localStorage.getItem('driverId');
-  
-  if (!uniqueRiderId) {
-    console.error('No valid rider ID found. Skipping room registration.');
-    return;
-  }
-
-  socket.emit('register_rider', { 
-    riderId: uniqueRiderId, 
-    driverId: uniqueRiderId 
+  const socket = io(SOCKET_URL, {
+    transports: ['websocket', 'polling']
   });
-});
-    // INSERT HERE: Continuous GPS location tracker
+
+  socket.on('connect', () => {
+    // Register rider using their actual ID
+    socket.emit('register_rider', { 
+      riderId: profile.id, 
+      driverId: profile.id 
+    });
+  });
+
+  // Track live GPS location and send to Redis
   let watchId = null;
   if ('geolocation' in navigator) {
     watchId = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude, longitude, heading } = position.coords;
         
+        // This puts the rider into Redis Geo Index at their current location
         socket.emit('send_rider_location', {
-          orderId: activeDelivery ? activeDelivery.id : null,
           riderId: profile.id,
           driverId: profile.id,
           lat: latitude,
@@ -94,39 +89,25 @@ socket.on('connect', () => {
         });
       },
       (error) => console.error('[GEOLOCATION ERROR]:', error.message),
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 5000 }
     );
   }
-    const handleNewOffer = (data) => {
-      console.log('[RIDER DASHBOARD] Received new order offer broadcast:', data);
-      
-      const normalizedOffer = {
-        id: data.orderId || data.id || `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-        restaurant: data.restaurant || 'Main Kitchen',
-        restaurantAddress: data.restaurantAddress || 'Restaurant Location',
-        deliveryAddress: data.deliveryAddress || 'Customer Location',
-        earnings: data.earnings || `₹${Math.round((data.calcTotal || 100) * 0.2)}`,
-        pickupDistance: data.pickupDistance || '1.2 km',
-        dropDistance: data.dropDistance || '3.5 km',
-        itemsCount: data.itemsCount || 1,
-        lat: data.lat,
-        lng: data.lng
-      };
 
-      setIncomingOffer(normalizedOffer);
-    };
+  const handleNewOffer = (data) => {
+    console.log('[RIDER DASHBOARD] Received offer:', data);
+    setIncomingOffer(data);
+  };
 
-    // Listen to both offer event names to ensure full compatibility
-    socket.on('new_order_offer', handleNewOffer);
-    socket.on('new_delivery_assignment', handleNewOffer);
+  socket.on('new_order_offer', handleNewOffer);
+  socket.on('new_delivery_assignment', handleNewOffer);
 
-return () => {
+  return () => {
     if (watchId !== null) navigator.geolocation.clearWatch(watchId);
     socket.off('new_order_offer', handleNewOffer);
     socket.off('new_delivery_assignment', handleNewOffer);
     socket.disconnect();
   };
-}, [isOnline, profile.id, activeDelivery]);
+}, [isOnline, profile.id]);
 
   const handleProfileSave = () => {
     setProfile(editForm);
