@@ -112,11 +112,26 @@ useEffect(() => {
     );
   }
 
-  const handleNewOffer = (data) => {
-    console.log('[RIDER DASHBOARD] Received offer:', data);
-      const offerData = data.order || data; 
-      setIncomingOffer(offerData);
+const handleNewOffer = (data) => {
+  console.log('[RIDER DASHBOARD] Received raw offer payload:', data);
+  
+  // Extract order object if nested
+  const rawOrder = data.order || data;
+
+  // Normalize structure so JSX fields exist
+  const normalizedOffer = {
+    id: rawOrder.id || rawOrder.order_id || 'ORD-NEW',
+    restaurant: rawOrder.restaurant || rawOrder.restaurant_name || 'Restaurant',
+    restaurantAddress: rawOrder.restaurantAddress || rawOrder.restaurant_address || 'Nearby Location',
+    deliveryAddress: rawOrder.deliveryAddress || rawOrder.delivery_address || rawOrder.address || 'Customer Location',
+    earnings: rawOrder.earnings || (rawOrder.total_amount ? `₹${rawOrder.total_amount}` : '₹85.00'),
+    pickupDistance: rawOrder.pickupDistance || '1.2 km',
+    dropDistance: rawOrder.dropDistance || '3.5 km',
+    ...rawOrder
   };
+
+  setIncomingOffer(normalizedOffer);
+};
 
   socket.on('new_order_offer', handleNewOffer);
   socket.on('new_delivery_assignment', handleNewOffer);
