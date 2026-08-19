@@ -74,6 +74,14 @@ useEffect(() => {
       driverId: profile.id 
     });
   });
+  socket.onAny((eventName, ...args) => {
+  console.log(`🔔 SOCKET EVENT RECEIVED: [${eventName}]`, args);
+  if (['new_order_offer', 'new_delivery_assignment', 'new_offer', 'offer_received'].includes(eventName)) {
+    const rawData = args[0];
+    const offerData = rawData?.order || rawData;
+    setIncomingOffer(offerData);
+  }
+});
 
   // Track live GPS location and send to Redis
   let watchId = null;
