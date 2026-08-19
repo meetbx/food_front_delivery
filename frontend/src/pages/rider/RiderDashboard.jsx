@@ -55,102 +55,119 @@ export default function RiderDashboard() {
     { id: 'ORD-9884', restaurant: 'Pizza Hut', earnings: '₹120', time: '11:15 AM' }
   ]);
 
-  // Handle Real-Time Socket Connections & Order Broadcast Listener
-  // RiderDashboard.jsx
-// RiderDashboard.jsx
-useEffect(() => {
-  if (!isOnline) return;
+  // Helper to structure and set incoming offers cleanly
+  const handleNewOffer = (data) => {
+    console.log('[RIDER DASHBOARD] Received offer payload:', data);
+    
+    const rawOrder = data.order || data;
+    if (!rawOrder) return;
 
-  const socket = io(SOCKET_URL, {
-    transports: ['websocket', 'polling'],
-    reconnection: true,
-    reconnectionAttempts: 5
-  });
+    const normalizedOffer = {
+      id: rawOrder.id || rawOrder.order_id || 'ORD-NEW',
+      restaurant: rawOrder.restaurant || rawOrder.restaurant_name || 'Restaurant',
+      restaurantAddress: rawOrder.restaurantAddress || rawOrder.restaurant_address || 'Nearby Location',
+      deliveryAddress: rawOrder.deliveryAddress || rawOrder.delivery_address || rawOrder.address || 'Customer Location',
+      earnings: rawOrder.earnings || (rawOrder.total_amount ? `₹${rawOrder.total_amount}` : '₹85.00'),
+      pickupDistance: rawOrder.pickupDistance || '1.2 km',
+      dropDistance: rawOrder.dropDistance || '3.5 km',
+      ...rawOrder
+    };
 
-  socket.on('connect', () => {
-    console.log('⚡ Socket connected:', socket.id);
-    socket.emit('register_rider', { 
-      riderId: profile.id, 
-      driverId: profile.id 
+    setIncomingOffer(normalizedOffer);
+  };
+
+  // Fallback REST check to catch offers missed during socket drops
+  const fetchPendingOffers = async () => {
+    try {
+      const res = await fetch(`${SOCKET_URL}/api/orders/pending-offers?driverId=${profile.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && (Array.isArray(data) ? data.length > 0 : data.id)) {
+          const offer = Array.isArray(data) ? data[0] : data;
+          handleNewOffer(offer);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch pending offers:', err.message);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOnline) return;
+
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000
     });
-  });
-  socket.onAny((eventName, ...args) => {
-  console.log(`🔔 SOCKET EVENT RECEIVED: [${eventName}]`, args);
-  if (['new_order_offer', 'new_delivery_assignment', 'new_offer', 'offer_received'].includes(eventName)) {
-    const rawData = args[0];
-    const offerData = rawData?.order || rawData;
-    setIncomingOffer(offerData);
-  }
-});
 
-  // Track live GPS location and send to Redis
-  let watchId = null;
-  if ('geolocation' in navigator) {
-    watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude, heading } = position.coords;
-        console.log('📍 Location emitted:', latitude, longitude);
+    const registerDriver = () => {
+      console.log('⚡ Registering rider with socket:', socket.id);
+      socket.emit('register_rider', { 
+        riderId: profile.id, 
+        driverId: profile.id 
+      });
+      // Check for pending offers immediately after registering socket
+      fetchPendingOffers();
+    };
 
-        socket.emit('send_rider_location', {
-          riderId: profile.id,
-          driverId: profile.id,
-          lat: latitude,
-          lng: longitude,
-          heading: heading || 0
-        });
-      },
-      (error) => {
-        console.warn('[GEOLOCATION WARNING]:', error.message);
-        // Fallback single update if watchPosition struggles
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            socket.emit('send_rider_location', {
-              riderId: profile.id,
-              driverId: profile.id,
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-              heading: pos.coords.heading || 0
-            });
-          },
-          (err) => console.error('[GEOLOCATION ERROR]:', err.message),
-          { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
-        );
-      },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 } // Disabling high accuracy stops DevTools sensor timeouts
-    );
-  }
+    socket.on('connect', registerDriver);
+    socket.io.on('reconnect', registerDriver);
 
-const handleNewOffer = (data) => {
-  console.log('[RIDER DASHBOARD] Received raw offer payload:', data);
-  
-  // Extract order object if nested
-  const rawOrder = data.order || data;
+    socket.onAny((eventName, ...args) => {
+      console.log(`🔔 SOCKET EVENT RECEIVED: [${eventName}]`, args);
+      if (['new_order_offer', 'new_delivery_assignment', 'new_offer', 'offer_received'].includes(eventName)) {
+        handleNewOffer(args[0]);
+      }
+    });
 
-  // Normalize structure so JSX fields exist
-  const normalizedOffer = {
-    id: rawOrder.id || rawOrder.order_id || 'ORD-NEW',
-    restaurant: rawOrder.restaurant || rawOrder.restaurant_name || 'Restaurant',
-    restaurantAddress: rawOrder.restaurantAddress || rawOrder.restaurant_address || 'Nearby Location',
-    deliveryAddress: rawOrder.deliveryAddress || rawOrder.delivery_address || rawOrder.address || 'Customer Location',
-    earnings: rawOrder.earnings || (rawOrder.total_amount ? `₹${rawOrder.total_amount}` : '₹85.00'),
-    pickupDistance: rawOrder.pickupDistance || '1.2 km',
-    dropDistance: rawOrder.dropDistance || '3.5 km',
-    ...rawOrder
-  };
+    socket.on('new_order_offer', handleNewOffer);
+    socket.on('new_delivery_assignment', handleNewOffer);
 
-  setIncomingOffer(normalizedOffer);
-};
+    // Track live GPS location and update backend
+    let watchId = null;
+    if ('geolocation' in navigator) {
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude, heading } = position.coords;
+          console.log('📍 Location emitted:', latitude, longitude);
 
-  socket.on('new_order_offer', handleNewOffer);
-  socket.on('new_delivery_assignment', handleNewOffer);
+          socket.emit('send_rider_location', {
+            riderId: profile.id,
+            driverId: profile.id,
+            lat: latitude,
+            lng: longitude,
+            heading: heading || 0
+          });
+        },
+        (error) => {
+          console.warn('[GEOLOCATION WARNING]:', error.message);
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              socket.emit('send_rider_location', {
+                riderId: profile.id,
+                driverId: profile.id,
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                heading: pos.coords.heading || 0
+              });
+            },
+            (err) => console.error('[GEOLOCATION ERROR]:', err.message),
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+          );
+        },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+      );
+    }
 
-  return () => {
-    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-    socket.off('new_order_offer', handleNewOffer);
-    socket.off('new_delivery_assignment', handleNewOffer);
-    socket.disconnect();
-  };
-}, [isOnline]); // ⚠️ Keep profile.id OUT of dependencies to avoid infinite reconnect cycles
+    return () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      socket.off('new_order_offer', handleNewOffer);
+      socket.off('new_delivery_assignment', handleNewOffer);
+      socket.disconnect();
+    };
+  }, [isOnline, profile.id]);
 
   const handleProfileSave = () => {
     setProfile(editForm);
@@ -177,8 +194,7 @@ const handleNewOffer = (data) => {
 
     const nextStatus = currentStepConfig.next;
     if (nextStatus === 'DELIVERED') {
-      // Add to earnings & completed list
-      const numericEarnings = parseFloat(activeDelivery.earnings.replace(/[^0-9.]/g, '')) || 65;
+      const numericEarnings = parseFloat(String(activeDelivery.earnings).replace(/[^0-9.]/g, '')) || 65;
       setEarnings(prev => ({
         today: prev.today + numericEarnings,
         week: prev.week + numericEarnings
@@ -222,7 +238,6 @@ const handleNewOffer = (data) => {
 
   return (
     <div className="min-h-screen bg-[#121212] text-white max-w-md mx-auto relative flex flex-col pb-20 border-x border-[#222]">
-      
       {/* Top Header */}
       <header className="p-4 bg-[#181818] border-b border-[#2a2a2a] flex justify-between items-center sticky top-0 z-20">
         <div className="flex items-center gap-3">
@@ -257,7 +272,6 @@ const handleNewOffer = (data) => {
 
       {/* Main Content Area */}
       <main className="p-4 flex-1 space-y-4">
-
         {/* Profile Tab View */}
         {activeTab === 'profile' ? (
           <div className="space-y-4">
