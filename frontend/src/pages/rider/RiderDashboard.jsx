@@ -141,8 +141,9 @@ const fetchPendingOffers = (lat = null, lng = null) => {
     }
   }, [activeRider]);
   
-  useEffect(() => {
-    if (!isOnline) return;
+useEffect(() => {
+    // 1. Guard against running without online status or profile ID
+    if (!isOnline || !profile?.id) return;
 
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
@@ -152,17 +153,19 @@ const fetchPendingOffers = (lat = null, lng = null) => {
     });
 
     const registerDriver = () => {
+      // 2. Double check profile.id is present before emitting
+      if (!profile?.id) return;
+
       console.log('⚡ Registering rider with socket:', socket.id);
       socket.emit('register_rider', { 
         riderId: profile.id, 
         driverId: profile.id 
       });
-      // Check for pending offers immediately after registering socket
       fetchPendingOffers();
     };
 
+    // 3. Register on connect
     socket.on('connect', registerDriver);
-    socket.io.on('reconnect', registerDriver);
 
     socket.onAny((eventName, ...args) => {
       console.log(`🔔 SOCKET EVENT RECEIVED: [${eventName}]`, args);
@@ -174,14 +177,12 @@ const fetchPendingOffers = (lat = null, lng = null) => {
     socket.on('new_order_offer', handleNewOffer);
     socket.on('new_delivery_assignment', handleNewOffer);
 
-    // Track live GPS location and update backend
+    // Track live GPS location
     let watchId = null;
     if ('geolocation' in navigator) {
       watchId = navigator.geolocation.watchPosition(
         (position) => {
           const { latitude, longitude, heading } = position.coords;
-          console.log('📍 Location emitted:', latitude, longitude);
-
           socket.emit('send_rider_location', {
             riderId: profile.id,
             driverId: profile.id,
@@ -190,33 +191,19 @@ const fetchPendingOffers = (lat = null, lng = null) => {
             heading: heading || 0
           });
         },
-        (error) => {
-          console.warn('[GEOLOCATION WARNING]:', error.message);
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              socket.emit('send_rider_location', {
-                riderId: profile.id,
-                driverId: profile.id,
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                heading: pos.coords.heading || 0
-              });
-            },
-            (err) => console.error('[GEOLOCATION ERROR]:', err.message),
-            { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
-          );
-        },
+        (error) => console.warn('[GEOLOCATION WARNING]:', error.message),
         { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
       );
     }
 
     return () => {
       if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      socket.off('connect', registerDriver);
       socket.off('new_order_offer', handleNewOffer);
       socket.off('new_delivery_assignment', handleNewOffer);
       socket.disconnect();
     };
-  }, [isOnline, profile.id]);
+  }, [isOnline, profile?.id]); // Safely depend on profile?.id
 
   const handleProfileSave = () => {
     setProfile(editForm);
