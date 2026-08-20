@@ -82,7 +82,29 @@ const [profile, setProfile] = useState({
 
     setIncomingOffer(normalizedOffer);
   };
+const handleLogin = async (e) => {
+  e.preventDefault(); // Prevents default browser navigation/GET submission
 
+  try {
+    const response = await fetch('https://food-delivery-rwor.onrender.com/api/rider/login', {
+      method: 'POST', // 👈 Must be POST
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        phone: phone,
+        password: password,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Login failed');
+
+    // Handle successful login...
+  } catch (err) {
+    console.error('Login Error:', err.message);
+  }
+};
   // Fallback REST check to catch offers missed during socket drops
 const fetchPendingOffers = (lat = null, lng = null) => {
   if (!profile?.id) return;
