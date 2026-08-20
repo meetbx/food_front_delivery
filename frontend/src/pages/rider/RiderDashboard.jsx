@@ -83,24 +83,30 @@ const [profile, setProfile] = useState({
     setIncomingOffer(normalizedOffer);
   };
 const handleLogin = async (e) => {
-  e.preventDefault(); // Prevents default browser navigation/GET submission
+  e.preventDefault();
 
   try {
     const response = await fetch('https://food-delivery-rwor.onrender.com/api/rider/login', {
-      method: 'POST', // 👈 Must be POST
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        phone: phone,
-        password: password,
-      }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, password }),
     });
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.message || 'Login failed');
 
-    // Handle successful login...
+    if (!response.ok) {
+      // ❌ Do NOT reference 'rider' here
+      throw new Error(data.message || 'Login failed');
+    }
+
+    // ✅ Declare local variables AFTER the fetch succeeds
+    const loggedInRider = data.rider;
+    const userToken = data.token;
+
+    // Save session and redirect
+    localStorage.setItem('rider_token', userToken);
+    localStorage.setItem('rider_user', JSON.stringify(loggedInRider));
+
   } catch (err) {
     console.error('Login Error:', err.message);
   }
