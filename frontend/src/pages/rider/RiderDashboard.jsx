@@ -20,7 +20,6 @@ import {
   Bell
 } from 'lucide-react';
 import { io } from 'socket.io-client';
-import { useParams, useNavigate } from 'react{router-dom';
 
 const STEPS = {
   ACCEPTED: { label: 'Arrived at Restaurant', next: 'ARRIVED_RESTAURANT', stepNum: 1 },
@@ -32,12 +31,15 @@ const STEPS = {
 const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-rwor.onrender.com';
 
 export default function RiderDashboard() {
-  const { riderId } = useParams(); // Reads dynamic ID directly from URL route (/rider/dashboard/:riderId)
-  const navigate = useNavigate();
   const [isLoggedIn, setIsLoggedIn] = useState(true);
-const [profile, setProfile] = useState(() => {
-    const saved = localStorage.getItem(`rider_profile_${riderId}`);
-    return saved ? JSON.parse(saved) : null;
+  const [profile, setProfile] = useState({
+    id: 1, // Explicit rider/driver ID matching backend
+    name: 'Alex Rivera',
+    phone: '+1 (555) 019-2834',
+    rating: '4.92',
+    deliveries: 1240,
+    vehicle: 'Honda CB500X (AB-8920)',
+    joinDate: 'Jan 2023',
   });
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -94,34 +96,20 @@ const fetchPendingOffers = (lat = null, lng = null) => {
 };
 
   useEffect(() => {
-    const savedProfile = localStorage.getItem(`rider_profile_${riderId}`);
-    if (savedProfile) {
-      setProfile(JSON.parse(savedProfile));
-    } else {
-      // Fallback if session is missing for this URL
-      const legacyProfile = localStorage.getItem('rider_profile');
-      if (legacyProfile) {
-        setProfile(JSON.parse(legacyProfile));
-      }
-    }
-  }, [riderId]);
-
-  
-  useEffect(() => {
-
-    
-    const targetId = riderId || profile?.id;
-    if (!isLoggedIn || !isOnline || !targetId) return;
+    if (!isOnline) return;
 
     const socket = io(SOCKET_URL, {
-transports: ['websocket', 'polling'],
-      reconnection: true
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000
     });
 
     const registerDriver = () => {
       console.log('⚡ Registering rider with socket:', socket.id);
       socket.emit('register_rider', { 
- riderId: targetId, driverId: targetId 
+        riderId: profile.id, 
+        driverId: profile.id 
       });
       // Check for pending offers immediately after registering socket
       fetchPendingOffers();
@@ -149,28 +137,29 @@ transports: ['websocket', 'polling'],
           console.log('📍 Location emitted:', latitude, longitude);
 
           socket.emit('send_rider_location', {
-            riderId: targetId,
-            driverId: targetId,
-            lat:latitude,
-            lng:longitude,
+            riderId: profile.id,
+            driverId: profile.id,
+            lat: latitude,
+            lng: longitude,
             heading: heading || 0
           });
         },
         (error) => {
           console.warn('[GEOLOCATION WARNING]:', error.message);
- watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          socket.emit('send_rider_location', {
-            riderId: targetId,
-            driverId: targetId,
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              socket.emit('send_rider_location', {
+                riderId: profile.id,
+                driverId: profile.id,
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                heading: pos.coords.heading || 0
+              });
+            },
+            (err) => console.error('[GEOLOCATION ERROR]:', err.message),
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+          );
         },
-        (error) => console.warn(error),
-        { enableHighAccuracy: false, timeout: 10000 }
-      );
-    },
         { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
       );
     }
@@ -181,7 +170,7 @@ transports: ['websocket', 'polling'],
       socket.off('new_delivery_assignment', handleNewOffer);
       socket.disconnect();
     };
-  }, [riderId, isLoggedIn, isOnline, profile?.id]);
+  }, [isOnline, profile.id]);
 
   const handleProfileSave = () => {
     setProfile(editForm);
