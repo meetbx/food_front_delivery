@@ -20,6 +20,7 @@ import {
   Bell
 } from 'lucide-react';
 import { io } from 'socket.io-client';
+import { useRiderAuth } from '../../context/RiderAuthContext'; //
 
 const STEPS = {
   ACCEPTED: { label: 'Arrived at Restaurant', next: 'ARRIVED_RESTAURANT', stepNum: 1 },
@@ -29,17 +30,18 @@ const STEPS = {
 };
 
 const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-rwor.onrender.com';
+const activeRider = rider || JSON.parse(localStorage.getItem('rider_user') || '{}');
 
 export default function RiderDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(true);
-  const [profile, setProfile] = useState({
-    id: 1, // Explicit rider/driver ID matching backend
-    name: 'Alex Rivera',
-    phone: '+1 (555) 019-2834',
-    rating: '4.92',
-    deliveries: 1240,
-    vehicle: 'Honda CB500X (AB-8920)',
-    joinDate: 'Jan 2023',
+const [profile, setProfile] = useState({
+    id: activeRider.id || null, // ✅ Dynamically uses logged-in rider ID
+    name: activeRider.name || 'Rider Partner',
+    phone: activeRider.phone || '',
+    rating: '4.90',
+    deliveries: 0,
+    vehicle: 'Standard Vehicle',
+    joinDate: '2026',
   });
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -94,7 +96,18 @@ const fetchPendingOffers = (lat = null, lng = null) => {
     })
     .catch((err) => console.warn('[PENDING OFFERS API WARNING]:', err.message));
 };
-
+// Sync profile when auth state updates
+  useEffect(() => {
+    if (activeRider?.id) {
+      setProfile((prev) => ({
+        ...prev,
+        id: activeRider.id,
+        name: activeRider.name || prev.name,
+        phone: activeRider.phone || prev.phone,
+      }));
+    }
+  }, [activeRider]);
+  
   useEffect(() => {
     if (!isOnline) return;
 
