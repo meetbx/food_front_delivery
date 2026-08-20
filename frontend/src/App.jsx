@@ -45,8 +45,8 @@ export default function App() {
                     <Route path="/rider/auth" element={<RiderAuth />} />
                     <Route path="/rider/login" element={<RiderAuth />} />
                     <Route path="/rider/register" element={<RiderAuth />} />
-                    <Route path="/rider/dashboard" element={<RiderDashboard />} />
-
+                    <Route path="/rider/dashboard/:riderId" element={<RiderDashboard />} />
+                    <Route path="*" element={<Navigate to="/rider/login" replace />} />
                     {/* System Admin Routes */}
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/manage-restaurants" element={<ManageRestaurants />} />
