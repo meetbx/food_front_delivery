@@ -84,6 +84,10 @@ const [profile, setProfile] = useState({
   };
 const handleLogin = async (e) => {
   e.preventDefault();
+  // Inside handleLogin
+localStorage.setItem('rider_token', userToken);
+localStorage.setItem('rider_user', JSON.stringify(loggedInRider));
+localStorage.setItem('driver_id', loggedInRider.id); // Save driver_id explicitly
 
   try {
     const response = await fetch('https://food-delivery-rwor.onrender.com/api/rider/login', {
@@ -142,6 +146,10 @@ const fetchPendingOffers = (lat = null, lng = null) => {
   }, [activeRider]);
   
 useEffect(() => {
+
+  // Read driver ID directly from localStorage to prevent undefined race conditions
+  const savedRider = JSON.parse(localStorage.getItem('rider_user') || '{}');
+  const driverId = profile?.id || savedRider.id || localStorage.getItem('driver_id');
     // 1. Guard against running without online status or profile ID
     if (!isOnline || !profile?.id) return;
 
@@ -184,8 +192,8 @@ useEffect(() => {
         (position) => {
           const { latitude, longitude, heading } = position.coords;
           socket.emit('send_rider_location', {
-            riderId: profile.id,
-            driverId: profile.id,
+            riderId: driverId,
+            driverId: driverId,
             lat: latitude,
             lng: longitude,
             heading: heading || 0
