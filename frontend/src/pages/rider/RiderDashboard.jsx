@@ -104,21 +104,24 @@ const fetchPendingOffers = (lat = null, lng = null) => {
         setProfile(JSON.parse(legacyProfile));
       }
     }
+  }, [riderId]);
+
+  
+  useEffect(() => {
+
     
-    if (!isOnline) return;
+    const targetId = riderId || profile?.id;
+    if (!isLoggedIn || !isOnline || !targetId) return;
 
     const socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000
+transports: ['websocket', 'polling'],
+      reconnection: true
     });
 
     const registerDriver = () => {
       console.log('⚡ Registering rider with socket:', socket.id);
       socket.emit('register_rider', { 
-        riderId: profile.id, 
-        driverId: profile.id 
+ riderId: targetId, driverId: targetId 
       });
       // Check for pending offers immediately after registering socket
       fetchPendingOffers();
@@ -146,29 +149,28 @@ const fetchPendingOffers = (lat = null, lng = null) => {
           console.log('📍 Location emitted:', latitude, longitude);
 
           socket.emit('send_rider_location', {
-            riderId: profile.id,
-            driverId: profile.id,
-            lat: latitude,
-            lng: longitude,
+            riderId: targetId,
+            driverId: targetId,
+            lat:latitude,
+            lng:longitude,
             heading: heading || 0
           });
         },
         (error) => {
           console.warn('[GEOLOCATION WARNING]:', error.message);
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              socket.emit('send_rider_location', {
-                riderId: profile.id,
-                driverId: profile.id,
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                heading: pos.coords.heading || 0
-              });
-            },
-            (err) => console.error('[GEOLOCATION ERROR]:', err.message),
-            { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
-          );
+ watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          socket.emit('send_rider_location', {
+            riderId: targetId,
+            driverId: targetId,
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
         },
+        (error) => console.warn(error),
+        { enableHighAccuracy: false, timeout: 10000 }
+      );
+    },
         { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
       );
     }
@@ -179,7 +181,7 @@ const fetchPendingOffers = (lat = null, lng = null) => {
       socket.off('new_delivery_assignment', handleNewOffer);
       socket.disconnect();
     };
-  }, [isOnline, profile.id,riderId]);
+  }, [riderId, isLoggedIn, isOnline, profile?.id]);
 
   const handleProfileSave = () => {
     setProfile(editForm);
