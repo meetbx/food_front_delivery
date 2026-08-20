@@ -30,9 +30,14 @@ const STEPS = {
 };
 
 const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-rwor.onrender.com';
-const activeRider = rider || JSON.parse(localStorage.getItem('rider_user') || '{}');
+
 
 export default function RiderDashboard() {
+
+  const { rider } = useRiderAuth();
+  const activeRider = rider || JSON.parse(localStorage.getItem('rider_user') || '{}');
+
+  
   const [isLoggedIn, setIsLoggedIn] = useState(true);
 const [profile, setProfile] = useState({
     id: activeRider.id || null, // ✅ Dynamically uses logged-in rider ID
