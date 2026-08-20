@@ -20,6 +20,7 @@ import {
   Bell
 } from 'lucide-react';
 import { io } from 'socket.io-client';
+import { useParams, useNavigate } from 'react{router-dom';
 
 const STEPS = {
   ACCEPTED: { label: 'Arrived at Restaurant', next: 'ARRIVED_RESTAURANT', stepNum: 1 },
@@ -31,15 +32,12 @@ const STEPS = {
 const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-rwor.onrender.com';
 
 export default function RiderDashboard() {
+  const { riderId } = useParams(); // Reads dynamic ID directly from URL route (/rider/dashboard/:riderId)
+  const navigate = useNavigate();
   const [isLoggedIn, setIsLoggedIn] = useState(true);
-  const [profile, setProfile] = useState({
-    id: 1, // Explicit rider/driver ID matching backend
-    name: 'Alex Rivera',
-    phone: '+1 (555) 019-2834',
-    rating: '4.92',
-    deliveries: 1240,
-    vehicle: 'Honda CB500X (AB-8920)',
-    joinDate: 'Jan 2023',
+const [profile, setProfile] = useState(() => {
+    const saved = localStorage.getItem(`rider_profile_${riderId}`);
+    return saved ? JSON.parse(saved) : null;
   });
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -96,6 +94,17 @@ const fetchPendingOffers = (lat = null, lng = null) => {
 };
 
   useEffect(() => {
+    const savedProfile = localStorage.getItem(`rider_profile_${riderId}`);
+    if (savedProfile) {
+      setProfile(JSON.parse(savedProfile));
+    } else {
+      // Fallback if session is missing for this URL
+      const legacyProfile = localStorage.getItem('rider_profile');
+      if (legacyProfile) {
+        setProfile(JSON.parse(legacyProfile));
+      }
+    }
+    
     if (!isOnline) return;
 
     const socket = io(SOCKET_URL, {
@@ -170,7 +179,7 @@ const fetchPendingOffers = (lat = null, lng = null) => {
       socket.off('new_delivery_assignment', handleNewOffer);
       socket.disconnect();
     };
-  }, [isOnline, profile.id]);
+  }, [isOnline, profile.id,riderId]);
 
   const handleProfileSave = () => {
     setProfile(editForm);
