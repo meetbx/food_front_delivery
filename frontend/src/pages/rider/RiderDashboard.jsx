@@ -173,13 +173,18 @@ useEffect(() => {
     };
 
     // 3. Register on connect
-    socket.on('connect', registerDriver);
+//    socket.on('connect', registerDriver);
+
+  socket.on('connect', () => {
+  console.log('[CLIENT SOCKET CONNECTED] Socket ID:', socket.id);
+  registerDriver();
+});
 
     socket.onAny((eventName, ...args) => {
-      console.log(`🔔 SOCKET EVENT RECEIVED: [${eventName}]`, args);
-      if (['new_order_offer', 'new_delivery_assignment', 'new_offer', 'offer_received'].includes(eventName)) {
-        handleNewOffer(args[0]);
-      }
+      console.log(`[CLIENT RECEIVED EVENT]: '${eventName}'`, args);
+   //   if (['new_order_offer', 'new_delivery_assignment', 'new_offer', 'offer_received'].includes(eventName)) {
+   //     handleNewOffer(args[0]);
+    //  }
     });
 
     socket.on('new_order_offer', handleNewOffer);
@@ -190,16 +195,17 @@ useEffect(() => {
     if ('geolocation' in navigator) {
       watchId = navigator.geolocation.watchPosition(
         (position) => {
-          const { latitude, longitude, heading } = position.coords;
+          const { latitude, longitude /* ,  heading*/ } = position.coords;
+          console.log(`[CLIENT GPS EMIT] Sending coords to backend -> Lat: ${latitude}, Lng: ${longitude}`);
           socket.emit('send_rider_location', {
             riderId: driverId,
             driverId: driverId,
             lat: latitude,
             lng: longitude,
-            heading: heading || 0
+           // heading: heading || 0
           });
         },
-        (error) => console.warn('[GEOLOCATION WARNING]:', error.message),
+        (error) => console.warn('[GEOLOCATION ERROR]:', error.message),
         { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
       );
     }
