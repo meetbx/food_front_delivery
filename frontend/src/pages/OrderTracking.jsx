@@ -75,6 +75,7 @@ export default function OrderTracking() {
           lat: parsedCustLat,
           lng: parsedCustLng,
         },
+        rider_location: data.rider_location || null,
       });
       setLoading(false);
     } catch (err) {
@@ -97,12 +98,15 @@ export default function OrderTracking() {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      socket.emit('join_trial_room', { orderId: String(id) });
+      socket.emit('join_order_room', { orderId: String(id) });
     });
 
-    socket.on('rider_location_updated', (data) => {
-      const newPos = { lat: parseFloat(data.lat), lng: parseFloat(data.lng) };
+    const applyRiderPosition = (data) => {
+      const lat = parseFloat(data?.lat ?? data?.riderLocation?.lat);
+      const lng = parseFloat(data?.lng ?? data?.riderLocation?.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
+      const newPos = { lat, lng };
       if (!prevPosRef.current) {
         prevPosRef.current = newPos;
       } else if (targetPosRef.current) {
@@ -111,11 +115,33 @@ export default function OrderTracking() {
 
       targetPosRef.current = newPos;
       animateMarkers();
+    };
+
+    socket.on('rider_location_updated', applyRiderPosition);
+
+    socket.on('order_accepted', (data) => {
+      if (data?.riderLocation) {
+        applyRiderPosition(data.riderLocation);
+      }
+      setOrder(prev => prev ? {
+        ...prev,
+        status: 'Accepted',
+        rider_id: data.riderId,
+        rider_location: data.riderLocation
+          ? { ...data.riderLocation, riderId: data.riderId }
+          : prev.rider_location
+      } : prev);
+    });
+
+    socket.on('order_taken', (data) => {
+      if (String(data?.orderId) === String(id)) {
+        fetchOrderDetails();
+      }
     });
 
     return () => {
       if (socketRef.current) {
-        socketRef.current.emit('leave_trial_room', { orderId: id });
+        socketRef.current.emit('leave_order_room', { orderId: id });
         socketRef.current.disconnect();
       }
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
@@ -161,6 +187,11 @@ const handlePayment = async () => {
     const google = window.google;
 
     const restLoc = { lat: order.restaurant.lat, lng: order.restaurant.lng };
+    const riderLoc = order.rider_location &&
+      Number.isFinite(parseFloat(order.rider_location.lat)) &&
+      Number.isFinite(parseFloat(order.rider_location.lng))
+      ? { lat: parseFloat(order.rider_location.lat), lng: parseFloat(order.rider_location.lng) }
+      : restLoc;
     const hasValidCust = typeof order.customer.lat === 'number' && !isNaN(order.customer.lat);
     const custLoc = hasValidCust ? { lat: order.customer.lat, lng: order.customer.lng } : order.customer.address;
 
@@ -207,7 +238,7 @@ const handlePayment = async () => {
     }
 
     const riderMarker = new google.maps.Marker({
-      position: restLoc,
+      position: riderLoc,
       map,
       icon: {
         url: '/fast-shipping.png',
@@ -278,7 +309,7 @@ const handlePayment = async () => {
   const animateMarkers = () => {
     if (!prevPosRef.current || !targetPosRef.current) return;
     const startTime = performance.now();
-    const duration = 2000;
+    const duration = 2800;
 
     const step = (currentTime) => {
       const elapsed = currentTime - startTime;
