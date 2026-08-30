@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Navigation, 
   Phone, 
@@ -55,6 +55,8 @@ const [profile, setProfile] = useState({
   const [isOnline, setIsOnline] = useState(true);
   const [incomingOffer, setIncomingOffer] = useState(null);
   const [activeDelivery, setActiveDelivery] = useState(null);
+  const activeDeliveryRef = useRef(null);
+  const riderSocketRef = useRef(null);
   const [earnings, setEarnings] = useState({ today: 142.50, week: 680.00 });
   const [activeTab, setActiveTab] = useState('duty');
   const [recentHistory, setRecentHistory] = useState([
@@ -80,7 +82,17 @@ const [profile, setProfile] = useState({
       ...rawOrder
     };
 
-    setIncomingOffer(normalizedOffer);
+    // Once a rider has accepted an order, never allow another copy of that
+    // offer (or a late socket/reconnect event) to reopen the popup.
+    if (activeDeliveryRef.current) {
+      console.log('[RIDER DASHBOARD] Ignoring offer while rider has active delivery:', normalizedOffer.id);
+      return;
+    }
+
+    setIncomingOffer(prev => {
+      if (prev && String(prev.id) === String(normalizedOffer.id)) return prev;
+      return normalizedOffer;
+    });
   };
 const handleLogin = async (e) => {
   e.preventDefault();
@@ -144,6 +156,10 @@ const fetchPendingOffers = (lat = null, lng = null) => {
       }));
     }
   }, [activeRider]);
+
+  useEffect(() => {
+    activeDeliveryRef.current = activeDelivery;
+  }, [activeDelivery]);
   
 useEffect(() => {
   const savedRider = JSON.parse(localStorage.getItem('rider_user') || '{}');
@@ -232,12 +248,14 @@ useEffect(() => {
     });
 
     socket.once('order_accept_success', ({ orderId }) => {
-      setActiveDelivery({
+      const acceptedDelivery = {
         ...incomingOffer,
         id: orderId,
         status: 'ACCEPTED',
         acceptedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      });
+      };
+      activeDeliveryRef.current = acceptedDelivery;
+      setActiveDelivery(acceptedDelivery);
       setIncomingOffer(null);
       socket.disconnect();
     });
@@ -289,6 +307,7 @@ useEffect(() => {
         ...prev
       ]);
 
+      activeDeliveryRef.current = null;
       setActiveDelivery(null);
     } else {
       setActiveDelivery(prev => ({ ...prev, status: nextStatus }));
