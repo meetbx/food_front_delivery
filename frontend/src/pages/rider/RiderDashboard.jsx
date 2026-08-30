@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Navigation, 
   Phone, 
@@ -37,11 +37,6 @@ export default function RiderDashboard() {
   const { rider } = useRiderAuth();
   const activeRider = rider || JSON.parse(localStorage.getItem('rider_user') || '{}');
 
-  const socketRef = useRef(null);
-  const gpsWatchRef = useRef(null);
-  const handledOfferIdsRef = useRef(new Set());
-  const acceptedOfferIdsRef = useRef(new Set());
-
   
   const [isLoggedIn, setIsLoggedIn] = useState(true);
 const [profile, setProfile] = useState({
@@ -67,17 +62,15 @@ const [profile, setProfile] = useState({
     { id: 'ORD-9884', restaurant: 'Pizza Hut', earnings: '₹120', time: '11:15 AM' }
   ]);
 
-  // Normalize an incoming offer and ignore duplicates/stale events.
-  const handleNewOffer = useCallback((data) => {
-    const rawOrder = data?.order || data;
+  // Helper to structure and set incoming offers cleanly
+  const handleNewOffer = (data) => {
+    console.log('[RIDER DASHBOARD] Received offer payload:', data);
+    
+    const rawOrder = data.order || data;
     if (!rawOrder) return;
 
-    const orderId = rawOrder.id || rawOrder.orderId || rawOrder.order_id;
-    if (!orderId) return;
-
     const normalizedOffer = {
-      id: orderId,
-      orderId,
+      id: rawOrder.id || rawOrder.order_id || 'ORD-NEW',
       restaurant: rawOrder.restaurant || rawOrder.restaurant_name || 'Restaurant',
       restaurantAddress: rawOrder.restaurantAddress || rawOrder.restaurant_address || 'Nearby Location',
       deliveryAddress: rawOrder.deliveryAddress || rawOrder.delivery_address || rawOrder.address || 'Customer Location',
@@ -87,26 +80,9 @@ const [profile, setProfile] = useState({
       ...rawOrder
     };
 
-    if (acceptedOfferIdsRef.current.has(String(orderId))) {
-      console.log(`[OFFER IGNORE] Order ${orderId} was already accepted.`);
-      return;
-    }
-
-    if (activeDelivery?.id && String(activeDelivery.id) === String(orderId)) {
-      console.log(`[OFFER IGNORE] Order ${orderId} is already active.`);
-      return;
-    }
-
-    if (handledOfferIdsRef.current.has(String(orderId))) {
-      console.log(`[OFFER DUPLICATE IGNORE] Order ${orderId}`);
-      return;
-    }
-
-    handledOfferIdsRef.current.add(String(orderId));
     setIncomingOffer(normalizedOffer);
-  }, [activeDelivery]);
-
-  const handleLogin = async (e) => {
+  };
+const handleLogin = async (e) => {
   e.preventDefault();
   // Inside handleLogin
 localStorage.setItem('rider_token', userToken);
@@ -139,26 +115,24 @@ localStorage.setItem('driver_id', loggedInRider.id); // Save driver_id explicitl
     console.error('Login Error:', err.message);
   }
 };
-  // REST recovery is intentionally conservative: it only shows offers that
-  // the server still considers genuinely pending.
-  const fetchPendingOffers = useCallback(async (lat = null, lng = null) => {
-    if (!profile?.id) return;
+  // Fallback REST check to catch offers missed during socket drops
+const fetchPendingOffers = (lat = null, lng = null) => {
+  if (!profile?.id) return;
 
-    let url = `${SOCKET_URL}/api/orders/pending-offers?driverId=${encodeURIComponent(profile.id)}`;
-    if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      url += `&lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`;
-    }
+  let url = `${SOCKET_URL}/api/orders/pending-offers?driverId=${profile.id}`;
+  if (lat && lng) {
+    url += `&lat=${lat}&lng=${lng}`;
+  }
 
-    try {
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) return;
-      const result = await res.json();
-      if (result?.data) handleNewOffer(result.data);
-    } catch (err) {
-      console.warn('[PENDING OFFERS API WARNING]:', err.message);
-    }
-  }, [profile?.id, handleNewOffer]);
-
+  fetch(url)
+    .then((res) => res.ok ? res.json() : null)
+    .then((result) => {
+      if (result?.data) {
+        handleNewOffer(result.data);
+      }
+    })
+    .catch((err) => console.warn('[PENDING OFFERS API WARNING]:', err.message));
+};
 // Sync profile when auth state updates
   useEffect(() => {
     if (activeRider?.id) {
@@ -172,180 +146,95 @@ localStorage.setItem('driver_id', loggedInRider.id); // Save driver_id explicitl
   }, [activeRider]);
   
 useEffect(() => {
-    const riderId = Number(profile?.id);
 
-    if (!isOnline || !Number.isInteger(riderId) || riderId <= 0) {
-      if (socketRef.current) {
-        socketRef.current.removeAllListeners();
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-      if (gpsWatchRef.current !== null && 'geolocation' in navigator) {
-        navigator.geolocation.clearWatch(gpsWatchRef.current);
-        gpsWatchRef.current = null;
-      }
-      return;
-    }
-
-    // IMPORTANT: one socket instance for this mounted dashboard/rider.
-    if (socketRef.current) {
-      return;
-    }
+  // Read driver ID directly from localStorage to prevent undefined race conditions
+  const savedRider = JSON.parse(localStorage.getItem('rider_user') || '{}');
+  const driverId = profile?.id || savedRider.id || localStorage.getItem('driver_id');
+    // 1. Guard against running without online status or profile ID
+    if (!isOnline || !profile?.id) return;
 
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 10000
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000
     });
 
-    socketRef.current = socket;
+    const registerDriver = () => {
+      // 2. Double check profile.id is present before emitting
+      if (!profile?.id) return;
 
-    const registerRider = () => {
-      console.log('[CLIENT SOCKET CONNECTED] Socket ID:', socket.id);
-      socket.emit('register_rider', {
-        riderId,
-        driverId: riderId
+      console.log('⚡ Registering rider with socket:', socket.id);
+      socket.emit('register_rider', { 
+        riderId: profile.id, 
+        driverId: profile.id 
       });
       fetchPendingOffers();
     };
 
-    const onOfferClosed = ({ orderId, acceptedBy } = {}) => {
-      if (!orderId) return;
-      handledOfferIdsRef.current.add(String(orderId));
-      if (acceptedOfferIdsRef.current.has(String(orderId))) return;
+    // 3. Register on connect
+//    socket.on('connect', registerDriver);
 
-      setIncomingOffer((current) => {
-        if (current?.id && String(current.id) === String(orderId)) return null;
-        return current;
-      });
+  socket.on('connect', () => {
+  console.log('[CLIENT SOCKET CONNECTED] Socket ID:', socket.id);
+  registerDriver();
+});
 
-      console.log(`[OFFER CLOSED] Order ${orderId} accepted by rider ${acceptedBy}`);
-    };
-
-    const onDuplicateConnection = () => {
-      console.warn('[SOCKET] Another rider dashboard connection replaced this socket.');
-      if (socketRef.current === socket) {
-        socketRef.current = null;
-      }
-      socket.disconnect();
-    };
-
-    socket.on('connect', registerRider);
-    socket.on('new_order_offer', handleNewOffer);
-    socket.on('new_delivery_assignment', handleNewOffer);
-    socket.on('order_offer_closed', onOfferClosed);
-    socket.on('duplicate_rider_connection', onDuplicateConnection);
-    socket.on('connect_error', (err) => {
-      console.warn('[CLIENT SOCKET CONNECT ERROR]:', err.message);
+    socket.onAny((eventName, ...args) => {
+      console.log(`[CLIENT RECEIVED EVENT]: '${eventName}'`, args);
+   //   if (['new_order_offer', 'new_delivery_assignment', 'new_offer', 'offer_received'].includes(eventName)) {
+   //     handleNewOffer(args[0]);
+    //  }
     });
 
+    socket.on('new_order_offer', handleNewOffer);
+    socket.on('new_delivery_assignment', handleNewOffer);
+
+    // Track live GPS location
+    let watchId = null;
     if ('geolocation' in navigator) {
-      gpsWatchRef.current = navigator.geolocation.watchPosition(
-        ({ coords }) => {
-          const { latitude, longitude } = coords;
-          if (!socket.connected) return;
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude /* ,  heading*/ } = position.coords;
+          console.log(`[CLIENT GPS EMIT] Sending coords to backend -> Lat: ${latitude}, Lng: ${longitude}`);
           socket.emit('send_rider_location', {
-            riderId,
-            driverId: riderId,
+            riderId: driverId,
+            driverId: driverId,
             lat: latitude,
-            lng: longitude
+            lng: longitude,
+           // heading: heading || 0
           });
         },
         (error) => console.warn('[GEOLOCATION ERROR]:', error.message),
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 5000 }
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
       );
     }
 
     return () => {
-      if (gpsWatchRef.current !== null && 'geolocation' in navigator) {
-        navigator.geolocation.clearWatch(gpsWatchRef.current);
-        gpsWatchRef.current = null;
-      }
-
-      socket.off('connect', registerRider);
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      socket.off('connect', registerDriver);
       socket.off('new_order_offer', handleNewOffer);
       socket.off('new_delivery_assignment', handleNewOffer);
-      socket.off('order_offer_closed', onOfferClosed);
-      socket.off('duplicate_rider_connection', onDuplicateConnection);
       socket.disconnect();
-
-      if (socketRef.current === socket) {
-        socketRef.current = null;
-      }
     };
-  }, [isOnline, profile?.id, fetchPendingOffers, handleNewOffer]);
+  }, [isOnline, profile?.id]); // Safely depend on profile?.id
 
   const handleProfileSave = () => {
     setProfile(editForm);
     setIsEditingProfile(false);
   };
 
-  const acceptOffer = async () => {
-    if (!incomingOffer?.id || !profile?.id) return;
-
-    const orderId = Number(incomingOffer.id);
-    const riderId = Number(profile.id);
-
-    if (!Number.isInteger(orderId) || !Number.isInteger(riderId)) return;
-    if (acceptedOfferIdsRef.current.has(String(orderId))) return;
-
-    acceptedOfferIdsRef.current.add(String(orderId));
-    handledOfferIdsRef.current.add(String(orderId));
+  const acceptOffer = () => {
+    setActiveDelivery({
+      ...incomingOffer,
+      status: 'ACCEPTED',
+      acceptedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
     setIncomingOffer(null);
-
-    try {
-      const response = await fetch(`${SOCKET_URL}/api/rider/offers/${orderId}/accept`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-        body: JSON.stringify({ riderId })
-      });
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.success) {
-        acceptedOfferIdsRef.current.delete(String(orderId));
-        console.warn('[OFFER ACCEPT FAILED]:', result.message || 'Offer no longer available');
-        await fetchPendingOffers();
-        return;
-      }
-
-      setActiveDelivery({
-        ...incomingOffer,
-        status: 'ACCEPTED',
-        acceptedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      });
-    } catch (err) {
-      acceptedOfferIdsRef.current.delete(String(orderId));
-      console.error('[OFFER ACCEPT ERROR]:', err.message);
-      await fetchPendingOffers();
-    }
   };
 
-  const rejectOffer = async () => {
-    if (!incomingOffer?.id || !profile?.id) {
-      setIncomingOffer(null);
-      return;
-    }
-
-    const orderId = Number(incomingOffer.id);
-    const riderId = Number(profile.id);
-    handledOfferIdsRef.current.add(String(orderId));
+  const rejectOffer = () => {
     setIncomingOffer(null);
-
-    try {
-      await fetch(`${SOCKET_URL}/api/rider/offers/${orderId}/reject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-        body: JSON.stringify({ riderId })
-      });
-    } catch (err) {
-      console.warn('[OFFER REJECT WARNING]:', err.message);
-    }
   };
 
   const advanceStep = () => {
