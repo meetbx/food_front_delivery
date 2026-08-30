@@ -224,14 +224,48 @@ useEffect(() => {
     setIsEditingProfile(false);
   };
 
-  const acceptOffer = () => {
+const acceptOffer = async () => {
+  if (!incomingOffer) return;
+
+  const orderId = incomingOffer.id || incomingOffer.orderId;
+  const riderId = profile?.id;
+
+  try {
+    // 1. Tell backend API that order is ACCEPTED by this rider
+    const response = await fetch(`${SOCKET_URL}/api/orders/${orderId}/status`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('rider_token') || ''}`
+      },
+      body: JSON.stringify({ 
+        status: 'ACCEPTED',
+        rider_id: riderId 
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('Failed to update status on server');
+      return;
+    }
+
+    // 2. Set local Active Delivery state
     setActiveDelivery({
       ...incomingOffer,
       status: 'ACCEPTED',
       acceptedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
+
+    // 3. Clear the popup overlay
     setIncomingOffer(null);
-  };
+
+    // 4. Notify backend via Socket.IO if needed
+    // socket.emit('rider_accepted_order', { orderId, riderId });
+
+  } catch (err) {
+    console.error('Error accepting offer:', err);
+  }
+};
 
   const rejectOffer = () => {
     setIncomingOffer(null);
