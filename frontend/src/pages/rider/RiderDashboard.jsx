@@ -64,7 +64,7 @@ const [profile, setProfile] = useState({
 
   // Helper to structure and set incoming offers cleanly
   const handleNewOffer = (data) => {
-    console.log('[RIDER DASHBOARD] Received offer payload:', data);
+    console.log('📥 [FRONTEND RECEIVED OFFER]:', data);
     
     const rawOrder = data.order || data;
     if (!rawOrder) return;
