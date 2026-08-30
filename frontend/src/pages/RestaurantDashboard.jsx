@@ -146,74 +146,78 @@ const fetchPendingOffers = (lat = null, lng = null) => {
   }, [activeRider]);
   
 useEffect(() => {
+
+  // Read driver ID directly from localStorage to prevent undefined race conditions
   const savedRider = JSON.parse(localStorage.getItem('rider_user') || '{}');
   const driverId = profile?.id || savedRider.id || localStorage.getItem('driver_id');
-  if (!isOnline || !driverId) return;
+    // 1. Guard against running without online status or profile ID
+    if (!isOnline || !profile?.id) return;
 
-  const socket = io(SOCKET_URL, {
-    transports: ['websocket', 'polling'],
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1000
-  });
-
-  let latestPosition = null;
-  let locationInterval = null;
-  let watchId = null;
-
-  const registerDriver = () => {
-    socket.emit('register_rider', { riderId: driverId, driverId });
-    fetchPendingOffers();
-  };
-
-  const handleOrderTaken = ({ orderId }) => {
-    setIncomingOffer(prev => {
-      if (prev && String(prev.id) === String(orderId)) return null;
-      return prev;
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000
     });
-  };
 
-  socket.on('connect', registerDriver);
-  socket.on('new_order_offer', handleNewOffer);
-  socket.on('new_delivery_assignment', handleNewOffer);
-  socket.on('order_taken', handleOrderTaken);
+    const registerDriver = () => {
+      // 2. Double check profile.id is present before emitting
+      if (!profile?.id) return;
 
-  // GPS is sampled continuously, but the server receives one authoritative
-  // location update every 3 seconds.
-  if ('geolocation' in navigator) {
-    watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        latestPosition = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        };
-      },
-      (error) => console.warn('[GEOLOCATION ERROR]:', error.message),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 }
-    );
-
-    locationInterval = setInterval(() => {
-      if (!latestPosition || !socket.connected) return;
-      socket.emit('send_rider_location', {
-        riderId: driverId,
-        driverId,
-        lat: latestPosition.lat,
-        lng: latestPosition.lng
+      console.log('⚡ Registering rider with socket:', socket.id);
+      socket.emit('register_rider', { 
+        riderId: profile.id, 
+        driverId: profile.id 
       });
-      console.log(`[GPS 3s] rider=${driverId} lat=${latestPosition.lat} lng=${latestPosition.lng}`);
-    }, 3000);
-  }
+      fetchPendingOffers();
+    };
 
-  return () => {
-    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-    if (locationInterval) clearInterval(locationInterval);
-    socket.off('connect', registerDriver);
-    socket.off('new_order_offer', handleNewOffer);
-    socket.off('new_delivery_assignment', handleNewOffer);
-    socket.off('order_taken', handleOrderTaken);
-    socket.disconnect();
-  };
-}, [isOnline, profile?.id]); // Safely depend on profile?.id
+    // 3. Register on connect
+//    socket.on('connect', registerDriver);
+
+  socket.on('connect', () => {
+  console.log('[CLIENT SOCKET CONNECTED] Socket ID:', socket.id);
+  registerDriver();
+});
+
+    socket.onAny((eventName, ...args) => {
+      console.log(`[CLIENT RECEIVED EVENT]: '${eventName}'`, args);
+   //   if (['new_order_offer', 'new_delivery_assignment', 'new_offer', 'offer_received'].includes(eventName)) {
+   //     handleNewOffer(args[0]);
+    //  }
+    });
+
+    socket.on('new_order_offer', handleNewOffer);
+    socket.on('new_delivery_assignment', handleNewOffer);
+
+    // Track live GPS location
+    let watchId = null;
+    if ('geolocation' in navigator) {
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude /* ,  heading*/ } = position.coords;
+          console.log(`[CLIENT GPS EMIT] Sending coords to backend -> Lat: ${latitude}, Lng: ${longitude}`);
+          socket.emit('send_rider_location', {
+            riderId: driverId,
+            driverId: driverId,
+            lat: latitude,
+            lng: longitude,
+           // heading: heading || 0
+          });
+        },
+        (error) => console.warn('[GEOLOCATION ERROR]:', error.message),
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+      );
+    }
+
+    return () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      socket.off('connect', registerDriver);
+      socket.off('new_order_offer', handleNewOffer);
+      socket.off('new_delivery_assignment', handleNewOffer);
+      socket.disconnect();
+    };
+  }, [isOnline, profile?.id]); // Safely depend on profile?.id
 
   const handleProfileSave = () => {
     setProfile(editForm);
@@ -221,49 +225,16 @@ useEffect(() => {
   };
 
   const acceptOffer = () => {
-    if (!incomingOffer?.id || !profile?.id) return;
-
-    const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
-    socket.emit('register_rider', { riderId: profile.id, driverId: profile.id });
-    socket.emit('accept_order', {
-      orderId: incomingOffer.id,
-      riderId: profile.id,
-      driverId: profile.id
+    setActiveDelivery({
+      ...incomingOffer,
+      status: 'ACCEPTED',
+      acceptedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
-
-    socket.once('order_accept_success', ({ orderId }) => {
-      setActiveDelivery({
-        ...incomingOffer,
-        id: orderId,
-        status: 'ACCEPTED',
-        acceptedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      });
-      setIncomingOffer(null);
-      socket.disconnect();
-    });
-
-    socket.once('order_accept_failed', ({ message }) => {
-      alert(message || 'This order is no longer available.');
-      setIncomingOffer(null);
-      socket.disconnect();
-    });
+    setIncomingOffer(null);
   };
 
   const rejectOffer = () => {
-    if (!incomingOffer?.id || !profile?.id) {
-      setIncomingOffer(null);
-      return;
-    }
-
-    const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
-    socket.emit('register_rider', { riderId: profile.id, driverId: profile.id });
-    socket.emit('decline_order', {
-      orderId: incomingOffer.id,
-      riderId: profile.id,
-      driverId: profile.id
-    });
     setIncomingOffer(null);
-    setTimeout(() => socket.disconnect(), 500);
   };
 
   const advanceStep = () => {
