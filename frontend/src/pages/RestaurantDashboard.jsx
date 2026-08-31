@@ -1,587 +1,1380 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Navigation, 
-  Phone, 
-  MapPin, 
-  Store, 
-  CheckCircle2, 
-  Clock, 
-  Zap, 
-  ChevronRight,
-  ShieldCheck,
-  Star,
-  User,
-  Settings,
-  LogOut,
-  X,
-  Edit2,
-  Check,
-  TrendingUp,
-  Bell
-} from 'lucide-react';
-import { io } from 'socket.io-client';
-import { useRiderAuth } from '../../context/RiderAuthContext'; //
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import RestaurantAddressPicker from '../components/RestaurantAddressPicker';
 
-const STEPS = {
-  ACCEPTED: { label: 'Arrived at Restaurant', next: 'ARRIVED_RESTAURANT', stepNum: 1 },
-  ARRIVED_RESTAURANT: { label: 'Confirm Picked Up', next: 'PICKED_UP', stepNum: 2 },
-  PICKED_UP: { label: 'Arrived at Customer', next: 'ARRIVED_CUSTOMER', stepNum: 3 },
-  ARRIVED_CUSTOMER: { label: 'Complete Delivery', next: 'DELIVERED', stepNum: 4 },
-};
+import { API_BASE } from '../config';
 
-const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-rwor.onrender.com';
-
-
-export default function RiderDashboard() {
-
-  const { rider } = useRiderAuth();
-  const activeRider = rider || JSON.parse(localStorage.getItem('rider_user') || '{}');
-
+export default function RestaurantDashboard() {
+  const navigate = useNavigate();
+  const [restaurant, setRestaurant] = useState(null);
   
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
-const [profile, setProfile] = useState({
-    id: activeRider.id || null, // ✅ Dynamically uses logged-in rider ID
-    name: activeRider.name || 'Rider Partner',
-    phone: activeRider.phone || '',
-    rating: '4.90',
-    deliveries: 0,
-    vehicle: 'Standard Vehicle',
-    joinDate: '2026',
+  // Dashboard Navigation Tab ('orders' | 'menu')
+  const [activeTab, setActiveTab] = useState('orders');
+
+  // Address Picker Visibility Toggle
+  const [showAddressPicker, setShowAddressPicker] = useState(false);
+
+  // Restaurant Image Edit State
+  const [isEditingRestImg, setIsEditingRestImg] = useState(false);
+  const [restImgUrl, setRestImgUrl] = useState('');
+  const [updatingRestImg, setUpdatingRestImg] = useState(false);
+
+  // Orders State
+  const [orders, setOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [filter, setFilter] = useState('All');
+
+  // Menu / Dish State
+  const [menuItems, setMenuItems] = useState([]);
+  const [loadingMenu, setLoadingMenu] = useState(false);
+  const [addingDish, setAddingDish] = useState(false);
+
+  // New Dish Form State
+  const [dishName, setDishName] = useState('');
+  const [dishCategory, setDishCategory] = useState('Main Course');
+  const [dishDesc, setDishDesc] = useState('');
+  const [dishPrice, setDishPrice] = useState('');
+  const [isVeg, setIsVeg] = useState(true);
+  const [dishImage, setDishImage] = useState('');
+
+  // Edit Dish Modal State
+  const [editingDish, setEditingDish] = useState(null);
+  const [updatingDish, setUpdatingDish] = useState(false);
+
+  const restaurantId = restaurant?.id;
+
+  // 1. Verify authentication on load & populate state
+  useEffect(() => {
+    const storedData = localStorage.getItem('restaurantData');
+    if (!storedData) {
+      navigate('/restaurant-panel/auth');
+      return;
+    }
+    const parsedData = JSON.parse(storedData);
+    setRestaurant(parsedData);
+    setRestImgUrl(parsedData.image_url || '');
+  }, [navigate]);
+
+  // 2. Fetch live orders
+  const fetchOrders = useCallback(async () => {
+    if (!restaurantId) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/restaurant/${restaurantId}/orders`);
+      if (response.ok) {
+        const data = await response.json();
+        setOrders(data);
+      }
+    } catch (err) {
+      console.error('Error fetching live orders:', err);
+    } finally {
+      setLoadingOrders(false);
+    }
+  }, [restaurantId]);
+
+  // 3. Fetch menu items
+  const fetchMenu = useCallback(async () => {
+    if (!restaurantId) return;
+    setLoadingMenu(true);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/restaurants/${restaurantId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setMenuItems(data.menu || []);
+        if (data.image_url) {
+          setRestaurant((prev) => {
+            if (prev && data.image_url !== prev.image_url) {
+              const updated = { ...prev, image_url: data.image_url };
+              localStorage.setItem('restaurantData', JSON.stringify(updated));
+              return updated;
+            }
+            return prev;
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching menu items:', err);
+    } finally {
+      setLoadingMenu(false);
+    }
+  }, [restaurantId]);
+
+  // Initial fetch + 5-second polling for orders
+  useEffect(() => {
+    if (!restaurantId) return;
+
+    fetchOrders();
+    fetchMenu();
+
+    const interval = setInterval(fetchOrders, 5000);
+    return () => clearInterval(interval);
+  }, [restaurantId, fetchOrders, fetchMenu]);
+
+  // Handle address saved callback
+  const handleAddressSaved = (updatedRestaurant) => {
+    setRestaurant(updatedRestaurant);
+    localStorage.setItem('restaurantData', JSON.stringify(updatedRestaurant));
+    // Auto-hide main address box once saved
+    setShowAddressPicker(false);
+  };
+
+  // Handle Restaurant Image Update
+  const handleUpdateRestaurantImage = async (e) => {
+    e.preventDefault();
+    if (!restaurant?.id) return;
+
+    setUpdatingRestImg(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/restaurants/${restaurant.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_url: restImgUrl })
+      });
+
+      if (response.ok) {
+        const updatedRestaurant = { ...restaurant, image_url: restImgUrl };
+        setRestaurant(updatedRestaurant);
+        localStorage.setItem('restaurantData', JSON.stringify(updatedRestaurant));
+        setIsEditingRestImg(false);
+        alert('✅ Restaurant photo updated successfully!');
+      } else {
+        alert('Failed to update restaurant image. Check server endpoint.');
+      }
+    } catch (err) {
+      console.error('Error updating restaurant image:', err);
+      alert('Server error while updating image.');
+    } finally {
+      setUpdatingRestImg(false);
+    }
+  };
+
+  // Update order status
+  const handleUpdateStatus = async (orderId, newStatus) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      if (response.ok) {
+        setOrders((prev) =>
+          prev.map((ord) => (ord.id === orderId ? { ...ord, status: newStatus } : ord))
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update status:', err);
+    }
+  };
+
+  // Add Dish Handler
+  const handleAddDish = async (e) => {
+    e.preventDefault();
+    if (!restaurant?.id) return;
+
+    setAddingDish(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/restaurants/${restaurant.id}/menu`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: dishName,
+          category: dishCategory,
+          description: dishDesc,
+          price: parseFloat(dishPrice),
+          is_veg: isVeg,
+          image_url: dishImage
+        })
+      });
+
+      if (response.ok) {
+        alert('✅ Dish added successfully!');
+        setDishName('');
+        setDishDesc('');
+        setDishPrice('');
+        setDishImage('');
+        fetchMenu();
+      } else {
+        alert('Failed to add dish. Please check your backend connection.');
+      }
+    } catch (err) {
+      console.error('Error adding dish:', err);
+      alert('Server error while adding dish.');
+    } finally {
+      setAddingDish(false);
+    }
+  };
+
+  // Open Edit Modal for a Specific Dish
+  const handleOpenEditModal = (dish) => {
+    setEditingDish({ ...dish });
+  };
+
+  // Save Updated Dish
+  const handleSaveEditDish = async (e) => {
+    e.preventDefault();
+    if (!editingDish?.id) return;
+
+    setUpdatingDish(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/menu-items/${editingDish.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editingDish.name,
+          category: editingDish.category,
+          description: editingDish.description,
+          price: parseFloat(editingDish.price),
+          is_veg: editingDish.is_veg,
+          image_url: editingDish.image_url
+        })
+      });
+
+      if (response.ok) {
+        alert('✅ Dish updated successfully!');
+        setEditingDish(null);
+        fetchMenu();
+      } else {
+        alert('Failed to update dish. Please check backend endpoint.');
+      }
+    } catch (err) {
+      console.error('Error updating dish:', err);
+      alert('Server error while updating dish.');
+    } finally {
+      setUpdatingDish(false);
+    }
+  };
+
+  // Delete Dish Handler
+  const handleDeleteDish = async (dishId) => {
+    if (!window.confirm('Are you sure you want to remove this dish?')) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/menu-items/${dishId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        setMenuItems((prev) => prev.filter((item) => item.id !== dishId));
+      } else {
+        alert('Failed to delete dish.');
+      }
+    } catch (err) {
+      console.error('Error deleting dish:', err);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('restaurantToken');
+    localStorage.removeItem('restaurantData');
+    navigate('/restaurant-panel/auth');
+  };
+
+  const filteredOrders = orders.filter((o) => {
+    if (filter === 'All') return true;
+    return (o.status || 'Pending').toLowerCase() === filter.toLowerCase();
   });
 
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [editForm, setEditForm] = useState({ ...profile });
+  if (!restaurant) return null;
 
-  const [isOnline, setIsOnline] = useState(true);
-  const [incomingOffer, setIncomingOffer] = useState(null);
-  const [activeDelivery, setActiveDelivery] = useState(null);
-  const [earnings, setEarnings] = useState({ today: 142.50, week: 680.00 });
-  const [activeTab, setActiveTab] = useState('duty');
-  const [recentHistory, setRecentHistory] = useState([
-    { id: 'ORD-9912', restaurant: 'Burger King', earnings: '₹85', time: '12:40 PM' },
-    { id: 'ORD-9884', restaurant: 'Pizza Hut', earnings: '₹120', time: '11:15 AM' }
-  ]);
-
-  // Helper to structure and set incoming offers cleanly
-  const handleNewOffer = (data) => {
-    console.log('[RIDER DASHBOARD] Received offer payload:', data);
-    
-    const rawOrder = data.order || data;
-    if (!rawOrder) return;
-
-    const normalizedOffer = {
-      id: rawOrder.id || rawOrder.order_id || 'ORD-NEW',
-      restaurant: rawOrder.restaurant || rawOrder.restaurant_name || 'Restaurant',
-      restaurantAddress: rawOrder.restaurantAddress || rawOrder.restaurant_address || 'Nearby Location',
-      deliveryAddress: rawOrder.deliveryAddress || rawOrder.delivery_address || rawOrder.address || 'Customer Location',
-      earnings: rawOrder.earnings || (rawOrder.total_amount ? `₹${rawOrder.total_amount}` : '₹85.00'),
-      pickupDistance: rawOrder.pickupDistance || '1.2 km',
-      dropDistance: rawOrder.dropDistance || '3.5 km',
-      ...rawOrder
-    };
-
-    setIncomingOffer(normalizedOffer);
-  };
-const handleLogin = async (e) => {
-  e.preventDefault();
-  // Inside handleLogin
-localStorage.setItem('rider_token', userToken);
-localStorage.setItem('rider_user', JSON.stringify(loggedInRider));
-localStorage.setItem('driver_id', loggedInRider.id); // Save driver_id explicitly
-
-  try {
-    const response = await fetch('https://food-delivery-rwor.onrender.com/api/rider/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, password }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      // ❌ Do NOT reference 'rider' here
-      throw new Error(data.message || 'Login failed');
-    }
-
-    // ✅ Declare local variables AFTER the fetch succeeds
-    const loggedInRider = data.rider;
-    const userToken = data.token;
-
-    // Save session and redirect
-    localStorage.setItem('rider_token', userToken);
-    localStorage.setItem('rider_user', JSON.stringify(loggedInRider));
-
-  } catch (err) {
-    console.error('Login Error:', err.message);
-  }
-};
-  // Fallback REST check to catch offers missed during socket drops
-const fetchPendingOffers = (lat = null, lng = null) => {
-  if (!profile?.id) return;
-
-  let url = `${SOCKET_URL}/api/orders/pending-offers?driverId=${profile.id}`;
-  if (lat && lng) {
-    url += `&lat=${lat}&lng=${lng}`;
-  }
-
-  fetch(url)
-    .then((res) => res.ok ? res.json() : null)
-    .then((result) => {
-      if (result?.data) {
-        handleNewOffer(result.data);
-      }
-    })
-    .catch((err) => console.warn('[PENDING OFFERS API WARNING]:', err.message));
-};
-// Sync profile when auth state updates
-  useEffect(() => {
-    if (activeRider?.id) {
-      setProfile((prev) => ({
-        ...prev,
-        id: activeRider.id,
-        name: activeRider.name || prev.name,
-        phone: activeRider.phone || prev.phone,
-      }));
-    }
-  }, [activeRider]);
-  
-useEffect(() => {
-
-  // Read driver ID directly from localStorage to prevent undefined race conditions
-  const savedRider = JSON.parse(localStorage.getItem('rider_user') || '{}');
-  const driverId = profile?.id || savedRider.id || localStorage.getItem('driver_id');
-    // 1. Guard against running without online status or profile ID
-    if (!isOnline || !profile?.id) return;
-
-    const socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000
-    });
-
-    const registerDriver = () => {
-      // 2. Double check profile.id is present before emitting
-      if (!profile?.id) return;
-
-      console.log('⚡ Registering rider with socket:', socket.id);
-      socket.emit('register_rider', { 
-        riderId: profile.id, 
-        driverId: profile.id 
-      });
-      fetchPendingOffers();
-    };
-
-    // 3. Register on connect
-//    socket.on('connect', registerDriver);
-
-  socket.on('connect', () => {
-  console.log('[CLIENT SOCKET CONNECTED] Socket ID:', socket.id);
-  registerDriver();
-});
-
-    socket.onAny((eventName, ...args) => {
-      console.log(`[CLIENT RECEIVED EVENT]: '${eventName}'`, args);
-   //   if (['new_order_offer', 'new_delivery_assignment', 'new_offer', 'offer_received'].includes(eventName)) {
-   //     handleNewOffer(args[0]);
-    //  }
-    });
-
-    socket.on('new_order_offer', handleNewOffer);
-    socket.on('new_delivery_assignment', handleNewOffer);
-
-    // Track live GPS location
-    let watchId = null;
-    if ('geolocation' in navigator) {
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          const { latitude, longitude /* ,  heading*/ } = position.coords;
-          console.log(`[CLIENT GPS EMIT] Sending coords to backend -> Lat: ${latitude}, Lng: ${longitude}`);
-          socket.emit('send_rider_location', {
-            riderId: driverId,
-            driverId: driverId,
-            lat: latitude,
-            lng: longitude,
-           // heading: heading || 0
-          });
-        },
-        (error) => console.warn('[GEOLOCATION ERROR]:', error.message),
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
-      );
-    }
-
-    return () => {
-      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-      socket.off('connect', registerDriver);
-      socket.off('new_order_offer', handleNewOffer);
-      socket.off('new_delivery_assignment', handleNewOffer);
-      socket.disconnect();
-    };
-  }, [isOnline, profile?.id]); // Safely depend on profile?.id
-
-  const handleProfileSave = () => {
-    setProfile(editForm);
-    setIsEditingProfile(false);
-  };
-
-  const acceptOffer = () => {
-    setActiveDelivery({
-      ...incomingOffer,
-      status: 'ACCEPTED',
-      acceptedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    });
-    setIncomingOffer(null);
-  };
-
-  const rejectOffer = () => {
-    setIncomingOffer(null);
-  };
-
-  const advanceStep = () => {
-    if (!activeDelivery) return;
-    const currentStepConfig = STEPS[activeDelivery.status];
-    if (!currentStepConfig) return;
-
-    const nextStatus = currentStepConfig.next;
-    if (nextStatus === 'DELIVERED') {
-      const numericEarnings = parseFloat(String(activeDelivery.earnings).replace(/[^0-9.]/g, '')) || 65;
-      setEarnings(prev => ({
-        today: prev.today + numericEarnings,
-        week: prev.week + numericEarnings
-      }));
-
-      setRecentHistory(prev => [
-        {
-          id: activeDelivery.id,
-          restaurant: activeDelivery.restaurant,
-          earnings: activeDelivery.earnings,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        },
-        ...prev
-      ]);
-
-      setActiveDelivery(null);
-    } else {
-      setActiveDelivery(prev => ({ ...prev, status: nextStatus }));
-    }
-  };
-
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-[#121212] text-white flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-[#1e1e1e] p-6 rounded-3xl border border-[#2a2a2a] text-center space-y-4">
-          <div className="w-16 h-16 bg-[#00b259]/10 rounded-full flex items-center justify-center mx-auto text-[#00b259]">
-            <Navigation className="w-8 h-8" />
-          </div>
-          <h2 className="text-xl font-bold">Rider Partner Portal</h2>
-          <p className="text-xs text-gray-400">Log in to view active orders and start earning.</p>
-          <button 
-            onClick={() => setIsLoggedIn(true)}
-            className="w-full py-3 bg-[#00b259] hover:bg-[#00964b] text-white font-bold rounded-2xl transition"
-          >
-            Log In as Rider
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Check if address is already saved
+  const hasSavedAddress = Boolean(restaurant.address || restaurant.full_address || restaurant.location);
 
   return (
-    <div className="min-h-screen bg-[#121212] text-white max-w-md mx-auto relative flex flex-col pb-20 border-x border-[#222]">
-      {/* Top Header */}
-      <header className="p-4 bg-[#181818] border-b border-[#2a2a2a] flex justify-between items-center sticky top-0 z-20">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-[#282828] border border-[#333] flex items-center justify-center font-bold text-sm text-[#00b259]">
-            {profile.name.split(' ').map(n => n[0]).join('')}
+    <div style={styles.dashboard}>
+      {/* Top Navigation & Profile Bar */}
+      <header style={styles.topBar}>
+        <div style={styles.restaurantProfileHeader}>
+          <div style={styles.restImgWrapper}>
+            <img
+              src={restaurant.image_url || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4'}
+              alt={restaurant.name}
+              style={styles.restHeaderImg}
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4';
+              }}
+            />
+            <button
+              onClick={() => setIsEditingRestImg(!isEditingRestImg)}
+              style={styles.editRestImgBadge}
+              title="Change Restaurant Image"
+            >
+              📷 Edit
+            </button>
           </div>
+
           <div>
-            <h1 className="text-sm font-bold flex items-center gap-1.5">
-              {profile.name}
-              <span className="flex items-center text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded-md border border-amber-500/20">
-                <Star className="w-2.5 h-2.5 fill-amber-400 mr-0.5" />
-                {profile.rating}
-              </span>
-            </h1>
-            <p className="text-[11px] text-gray-400">{profile.vehicle}</p>
+            <h1 style={styles.brandTitle}>{restaurant.name}</h1>
+            <p style={styles.brandSubtitle}>
+              Partner Panel • {restaurant.city || 'Ahmedabad'}
+            </p>
           </div>
         </div>
 
-        {/* Duty Toggle Button */}
-        <button
-          onClick={() => setIsOnline(!isOnline)}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-            isOnline 
-              ? 'bg-[#00b259]/10 text-[#00b259] border border-[#00b259]/30' 
-              : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
-          }`}
-        >
-          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#00b259] animate-pulse' : 'bg-zinc-500'}`} />
-          {isOnline ? 'ONLINE' : 'OFFLINE'}
-        </button>
+        {/* Navigation Tabs */}
+        <div style={styles.navTabs}>
+          <button
+            onClick={() => setActiveTab('orders')}
+            style={{
+              ...styles.tabBtn,
+              ...(activeTab === 'orders' ? styles.activeTabBtn : {})
+            }}
+          >
+            📋 Live Orders ({orders.filter(o => o.status === 'Pending' || o.status === 'Preparing').length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('menu')}
+            style={{
+              ...styles.tabBtn,
+              ...(activeTab === 'menu' ? styles.activeTabBtn : {})
+            }}
+          >
+            🍽️ Manage Menu ({menuItems.length})
+          </button>
+        </div>
+
+        <div style={styles.headerRight}>
+          <span style={styles.liveBadge}>● Live Sync Active</span>
+
+          {/* Address Taskbar Button */}
+          <button
+            onClick={() => setShowAddressPicker((prev) => !prev)}
+            style={{
+              ...styles.addressTaskbarBtn,
+              ...(hasSavedAddress ? styles.addressTaskbarBtnSaved : {})
+            }}
+            title={restaurant.address || restaurant.full_address || 'Manage Restaurant Location'}
+          >
+            📍 {hasSavedAddress ? 'Location Set' : 'Add Location'}
+          </button>
+
+          <button onClick={handleLogout} style={styles.logoutBtn}>
+            Logout
+          </button>
+        </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="p-4 flex-1 space-y-4">
-        {/* Profile Tab View */}
-        {activeTab === 'profile' ? (
-          <div className="space-y-4">
-            <div className="bg-[#1e1e1e] border border-[#2a2a2a] p-5 rounded-3xl space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-sm font-bold text-gray-200">Rider Profile</h3>
-                {!isEditingProfile ? (
-                  <button onClick={() => setIsEditingProfile(true)} className="text-xs text-[#00b259] font-bold flex items-center gap-1">
-                    <Edit2 className="w-3.5 h-3.5" /> Edit
-                  </button>
-                ) : (
-                  <button onClick={handleProfileSave} className="text-xs text-emerald-400 font-bold flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5" /> Save
-                  </button>
-                )}
-              </div>
+      {/* Expandable Restaurant Image Modal / Banner Form */}
+      {isEditingRestImg && (
+        <div style={styles.restImgModal}>
+          <form onSubmit={handleUpdateRestaurantImage} style={styles.restImgForm}>
+            <div style={{ flex: 1 }}>
+              <label style={styles.label}>Update Restaurant Cover / Profile Image URL</label>
+              <input
+                type="url"
+                required
+                value={restImgUrl}
+                onChange={(e) => setRestImgUrl(e.target.value)}
+                placeholder="https://images.unsplash.com/photo-..."
+                style={styles.input}
+              />
+            </div>
+            <button type="submit" disabled={updatingRestImg} style={styles.saveRestImgBtn}>
+              {updatingRestImg ? 'Saving...' : 'Save Photo'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsEditingRestImg(false)}
+              style={styles.cancelRestImgBtn}
+            >
+              Cancel
+            </button>
+          </form>
+        </div>
+      )}
 
-              {!isEditingProfile ? (
-                <div className="space-y-3 text-xs">
-                  <div className="flex justify-between border-b border-[#282828] pb-2">
-                    <span className="text-gray-400">Phone</span>
-                    <span className="font-medium text-white">{profile.phone}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-[#282828] pb-2">
-                    <span className="text-gray-400">Vehicle</span>
-                    <span className="font-medium text-white">{profile.vehicle}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-[#282828] pb-2">
-                    <span className="text-gray-400">Total Deliveries</span>
-                    <span className="font-medium text-white">{profile.deliveries}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Partner Since</span>
-                    <span className="font-medium text-white">{profile.joinDate}</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3 text-xs">
-                  <div>
-                    <label className="text-gray-400 block mb-1">Full Name</label>
-                    <input 
-                      type="text" 
-                      value={editForm.name} 
-                      onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                      className="w-full bg-[#121212] border border-[#333] rounded-xl p-2.5 text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-gray-400 block mb-1">Phone</label>
-                    <input 
-                      type="text" 
-                      value={editForm.phone} 
-                      onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
-                      className="w-full bg-[#121212] border border-[#333] rounded-xl p-2.5 text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-gray-400 block mb-1">Vehicle Details</label>
-                    <input 
-                      type="text" 
-                      value={editForm.vehicle} 
-                      onChange={e => setEditForm({ ...editForm, vehicle: e.target.value })}
-                      className="w-full bg-[#121212] border border-[#333] rounded-xl p-2.5 text-white"
-                    />
-                  </div>
-                </div>
+      {/* Main Content Container */}
+      <main style={styles.content}>
+        {/* Address Picker Section - Rendered if unsaved OR explicitly toggled open */}
+        {(!hasSavedAddress || showAddressPicker) && (
+          <div style={{ marginBottom: '24px' }}>
+            <RestaurantAddressPicker 
+              restaurant={restaurant} 
+              onAddressSaved={handleAddressSaved} 
+            />
+          </div>
+        )}
+
+        {/* ================= TAB 1: LIVE ORDERS ================= */}
+        {activeTab === 'orders' && (
+          <>
+            <div style={styles.filterBar}>
+              {['All', 'Pending', 'Preparing', 'Out for Delivery', 'Delivered', 'Cancelled'].map(
+                (status) => (
+                  <button
+                    key={status}
+                    onClick={() => setFilter(status)}
+                    style={{
+                      ...styles.filterTab,
+                      ...(filter === status ? styles.activeFilterTab : {})
+                    }}
+                  >
+                    {status}
+                  </button>
+                )
               )}
             </div>
 
-            <button 
-              onClick={() => setIsLoggedIn(false)}
-              className="w-full p-3 bg-red-500/10 text-red-400 border border-red-500/20 font-bold rounded-2xl text-xs flex items-center justify-center gap-2"
-            >
-              <LogOut className="w-4 h-4" /> Log Out
-            </button>
-          </div>
-        ) : (
-          /* Duty Tab View */
-          <>
-            {/* Today Earnings Banner */}
-            <div className="bg-gradient-to-r from-[#00b259]/20 to-emerald-900/10 border border-[#00b259]/30 p-4 rounded-3xl flex justify-between items-center">
-              <div>
-                <p className="text-[11px] text-emerald-400 font-bold uppercase tracking-wider">Today's Earnings</p>
-                <h2 className="text-2xl font-black text-white mt-0.5">₹{earnings.today.toFixed(2)}</h2>
+            {loadingOrders ? (
+              <div style={styles.centeredMessage}>Loading live orders...</div>
+            ) : filteredOrders.length === 0 ? (
+              <div style={styles.centeredMessage}>No orders found under "{filter}".</div>
+            ) : (
+              <div style={styles.grid}>
+                {filteredOrders.map((order) => {
+                  const currentStatus = order.status || 'Pending';
+                  return (
+                    <div key={order.id} style={styles.orderCard}>
+                      <div style={styles.cardHeader}>
+                        <div>
+                          <span style={styles.orderId}>Order #{order.id}</span>
+                          <div style={styles.orderTime}>
+                            {order.created_at
+                              ? new Date(order.created_at).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })
+                              : 'Just Now'}
+                          </div>
+                        </div>
+                        <span
+                          style={{
+                            ...styles.statusTag,
+                            ...getStatusBadgeStyle(currentStatus)
+                          }}
+                        >
+                          {currentStatus}
+                        </span>
+                      </div>
+
+                      <div style={styles.addressBox}>
+                        <strong>Delivery Address:</strong>
+                        <p style={styles.addressText}>{order.delivery_address || 'Walk-in / Standard'}</p>
+                      </div>
+
+                      <div style={styles.itemsList}>
+                        <strong style={styles.itemsTitle}>Items Ordered:</strong>
+                        {Array.isArray(order.items) && order.items.length > 0 ? (
+                          order.items.map((entry, idx) => {
+                            const item = entry.item || entry.menu_item || entry;
+                            const qty = entry.quantity || entry.qty || 1;
+                            const name = item.name || entry.item_name || 'Food Item';
+                            return (
+                              <div key={idx} style={styles.itemRow}>
+                                <span>
+                                  <strong style={styles.qtyText}>{qty}x</strong> {name}
+                                </span>
+                                <span>₹{Number(item.price || entry.price || 0) * qty}</span>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p style={styles.addressText}>Items details available in system.</p>
+                        )}
+                      </div>
+
+                      <div style={styles.cardFooter}>
+                        <div>
+                          <div style={styles.totalLabel}>Total Amount</div>
+                          <div style={styles.totalValue}>
+                            ₹{order.final_total || order.item_total || 0}
+                          </div>
+                        </div>
+                        <span style={styles.paymentMethod}>
+                          {order.payment_method || 'COD'} ({order.payment_status || 'Pending'})
+                        </span>
+                      </div>
+
+                      <div style={styles.actionsBox}>
+                        {currentStatus === 'Pending' && (
+                          <button
+                            onClick={() => handleUpdateStatus(order.id, 'Preparing')}
+                            style={{ ...styles.actionBtn, backgroundColor: '#059669' }}
+                          >
+                            Accept & Prepare
+                          </button>
+                        )}
+
+                        {currentStatus === 'Preparing' && (
+                          <button
+                            onClick={() => handleUpdateStatus(order.id, 'Out for Delivery')}
+                            style={{ ...styles.actionBtn, backgroundColor: '#0284c7' }}
+                          >
+                            Send Out for Delivery
+                          </button>
+                        )}
+
+                        {currentStatus === 'Out for Delivery' && (
+                          <button
+                            onClick={() => handleUpdateStatus(order.id, 'Delivered')}
+                            style={{ ...styles.actionBtn, backgroundColor: '#16a34a' }}
+                          >
+                            Mark Delivered
+                          </button>
+                        )}
+
+                        {currentStatus !== 'Delivered' && currentStatus !== 'Cancelled' && (
+                          <button
+                            onClick={() => handleUpdateStatus(order.id, 'Cancelled')}
+                            style={styles.cancelBtn}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="text-right">
-                <p className="text-[11px] text-gray-400">Weekly Total</p>
-                <p className="text-sm font-bold text-gray-200">₹{earnings.week.toFixed(2)}</p>
-              </div>
+            )}
+          </>
+        )}
+
+        {/* ================= TAB 2: MENU & DISH MANAGEMENT ================= */}
+        {activeTab === 'menu' && (
+          <div style={styles.menuLayout}>
+            {/* Left Box: Add Dish Form */}
+            <div style={styles.formContainer}>
+              <h2 style={styles.sectionHeader}>➕ Add New Dish</h2>
+              <form onSubmit={handleAddDish} style={styles.form}>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Dish Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={dishName}
+                    onChange={(e) => setDishName(e.target.value)}
+                    placeholder="e.g. Butter Paneer / Chicken Biryani"
+                    style={styles.input}
+                  />
+                </div>
+
+                <div style={styles.rowTwo}>
+                  <div style={styles.inputGroup}>
+                    <label style={styles.label}>Price (₹) *</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      value={dishPrice}
+                      onChange={(e) => setDishPrice(e.target.value)}
+                      placeholder="299"
+                      style={styles.input}
+                    />
+                  </div>
+
+                  <div style={styles.inputGroup}>
+                    <label style={styles.label}>Food Type *</label>
+                    <select
+                      value={isVeg}
+                      onChange={(e) => setIsVeg(e.target.value === 'true')}
+                      style={styles.select}
+                    >
+                      <option value="true">🟢 Veg</option>
+                      <option value="false">🔴 Non-Veg</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Category</label>
+                  <select
+                    value={dishCategory}
+                    onChange={(e) => setDishCategory(e.target.value)}
+                    style={styles.select}
+                  >
+                    <option value="Starters">Starters</option>
+                    <option value="Main Course">Main Course</option>
+                    <option value="Pizzas">Pizzas</option>
+                    <option value="Burgers">Burgers</option>
+                    <option value="Desserts">Desserts</option>
+                    <option value="Beverages">Beverages</option>
+                  </select>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Description</label>
+                  <textarea
+                    rows="3"
+                    value={dishDesc}
+                    onChange={(e) => setDishDesc(e.target.value)}
+                    placeholder="Brief description of the ingredients or taste..."
+                    style={styles.textarea}
+                  />
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Dish Image URL</label>
+                  <input
+                    type="url"
+                    value={dishImage}
+                    onChange={(e) => setDishImage(e.target.value)}
+                    placeholder="https://images.unsplash.com/photo-..."
+                    style={styles.input}
+                  />
+                </div>
+
+                {dishImage && (
+                  <div style={styles.imagePreviewBox}>
+                    <span style={styles.previewLabel}>Dish Image Preview</span>
+                    <img
+                      src={dishImage}
+                      alt="Preview"
+                      style={styles.previewImg}
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c';
+                      }}
+                    />
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={addingDish}
+                  style={styles.submitBtn}
+                >
+                  {addingDish ? 'Adding Dish...' : '+ Add Dish to Customer Menu'}
+                </button>
+              </form>
             </div>
 
-            {/* Offline Notice */}
-            {!isOnline && (
-              <div className="bg-[#1e1e1e] border border-[#2a2a2a] p-6 rounded-3xl text-center space-y-2">
-                <Zap className="w-8 h-8 text-gray-500 mx-auto" />
-                <h3 className="text-sm font-bold text-gray-300">You are currently Offline</h3>
-                <p className="text-xs text-gray-500">Toggle your status to Online to start receiving delivery requests.</p>
-              </div>
-            )}
-
-            {/* Active Delivery Workflow Card */}
-            {activeDelivery && (
-              <div className="bg-[#1e1e1e] border border-[#00b259]/40 p-4 rounded-3xl space-y-4 relative overflow-hidden">
-                <div className="flex justify-between items-center border-b border-[#2a2a2a] pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#00b259] animate-ping" />
-                    <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Active Order</h3>
-                  </div>
-                  <span className="text-xs font-bold text-white bg-[#282828] px-2.5 py-1 rounded-lg">
-                    {activeDelivery.id}
-                  </span>
-                </div>
-
-                <div className="space-y-3 text-xs">
-                  <div className="flex items-start gap-3">
-                    <Store className="w-4 h-4 text-[#00b259] shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-white text-sm">{activeDelivery.restaurant}</p>
-                      <p className="text-gray-400 text-[11px]">{activeDelivery.restaurantAddress}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-white text-sm">Delivery Destination</p>
-                      <p className="text-gray-400 text-[11px]">{activeDelivery.deliveryAddress}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-[#141414] p-3 rounded-2xl flex justify-between items-center text-xs">
-                  <span className="text-gray-400">Estimated Payout</span>
-                  <span className="font-bold text-emerald-400 text-sm">{activeDelivery.earnings}</span>
-                </div>
-
-                {/* Step Action Button */}
-                <button
-                  onClick={advanceStep}
-                  className="w-full py-3.5 bg-[#00b259] hover:bg-[#00964b] text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#00b259]/20 transition"
-                >
-                  <span>{STEPS[activeDelivery.status]?.label || 'Complete Step'}</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-
-            {/* Completed Deliveries History */}
-            <div className="bg-[#1e1e1e] border border-[#2a2a2a] p-4 rounded-3xl space-y-3">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider">Completed Today</h3>
-                <span className="text-[11px] text-gray-500">{recentHistory.length} deliveries</span>
+            {/* Right Box: Active Dishes List */}
+            <div style={styles.menuListContainer}>
+              <div style={styles.menuListHeader}>
+                <h2 style={styles.sectionHeader}>Active Dishes</h2>
+                <span style={styles.badgeCount}>{menuItems.length} items</span>
               </div>
 
-              {recentHistory.length === 0 ? (
-                <p className="text-xs text-gray-500 py-2">No completed deliveries yet.</p>
+              {loadingMenu ? (
+                <div style={styles.centeredMessage}>Loading menu items...</div>
+              ) : menuItems.length === 0 ? (
+                <div style={styles.emptyMenuBox}>
+                  <p style={{ margin: 0, fontWeight: '700', color: '#64748b' }}>No dishes added yet</p>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#94a3b8' }}>
+                    Use the form on the left to add your first dish!
+                  </p>
+                </div>
               ) : (
-                <div className="space-y-2">
-                  {recentHistory.map((order, idx) => (
-                    <div key={idx} className="flex justify-between items-center p-3 bg-[#121212] border border-[#2a2a2a] rounded-2xl text-xs">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-[#282828] flex items-center justify-center text-gray-400">
-                          <Store className="w-3.5 h-3.5 text-[#00b259]" />
+                <div style={styles.dishListScroll}>
+                  {menuItems.map((dish) => (
+                    <div key={dish.id} style={styles.dishCard}>
+                      <img
+                        src={dish.image_url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c'}
+                        alt={dish.name}
+                        style={styles.dishImg}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c';
+                        }}
+                      />
+                      <div style={styles.dishDetails}>
+                        <div style={styles.dishHeaderRow}>
+                          <span style={{ fontSize: '12px' }}>{dish.is_veg ? '🟢' : '🔴'}</span>
+                          <h4 style={styles.dishTitle}>{dish.name}</h4>
                         </div>
-                        <div>
-                          <p className="font-bold text-white">{order.restaurant}</p>
-                          <p className="text-[10px] text-gray-500">{order.id} • {order.time}</p>
-                        </div>
+                        <span style={styles.dishCategoryTag}>{dish.category || 'Main Course'}</span>
+                        <div style={styles.dishPrice}>₹{dish.price}</div>
+                        {dish.description && (
+                          <p style={styles.dishDescText}>{dish.description}</p>
+                        )}
                       </div>
-                      <span className="font-bold text-emerald-400">{order.earnings}</span>
+
+                      <div style={styles.dishControlBtns}>
+                        <button
+                          onClick={() => handleOpenEditModal(dish)}
+                          style={styles.editDishBtn}
+                          title="Edit Dish Details"
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDish(dish.id)}
+                          style={styles.deleteDishBtn}
+                          title="Delete Dish"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-          </>
+          </div>
         )}
+
       </main>
 
-      {/* INCOMING OFFER POPUP OVERLAY */}
-      {incomingOffer && isOnline && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end justify-center p-4">
-          <div className="w-full max-w-md bg-[#181818] border border-emerald-500/50 rounded-3xl p-5 space-y-4 animate-in slide-in-from-bottom duration-200">
-            <div className="flex justify-between items-start">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-[#00b259] animate-ping" />
-                <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">New Order Offer!</h3>
-              </div>
-              <button onClick={rejectOffer} className="text-gray-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
+      {/* ================= EDIT DISH MODAL ================= */}
+      {editingDish && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalContent}>
+            <div style={styles.modalHeader}>
+              <h3 style={{ margin: 0, fontSize: '18px', color: '#0f172a' }}>✏️ Edit Dish</h3>
+              <button onClick={() => setEditingDish(null)} style={styles.closeModalBtn}>✕</button>
             </div>
 
-            <div className="bg-[#222] p-4 rounded-2xl flex justify-between items-center">
-              <div>
-                <p className="text-[11px] text-gray-400">Total Earnings</p>
-                <h2 className="text-2xl font-black text-emerald-400">{incomingOffer.earnings}</h2>
+            <form onSubmit={handleSaveEditDish} style={styles.form}>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Dish Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingDish.name || ''}
+                  onChange={(e) => setEditingDish({ ...editingDish, name: e.target.value })}
+                  style={styles.input}
+                />
               </div>
-              <div className="text-right text-xs text-gray-400">
-                <p>{incomingOffer.pickupDistance} to pickup</p>
-                <p>{incomingOffer.dropDistance} drop distance</p>
-              </div>
-            </div>
 
-            <div className="space-y-2.5 text-xs">
-              <div className="flex items-start gap-2.5">
-                <Store className="w-4 h-4 text-[#00b259] shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-white">{incomingOffer.restaurant}</p>
-                  <p className="text-gray-400 text-[11px]">{incomingOffer.restaurantAddress}</p>
+              <div style={styles.rowTwo}>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Price (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={editingDish.price || ''}
+                    onChange={(e) => setEditingDish({ ...editingDish, price: e.target.value })}
+                    style={styles.input}
+                  />
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Food Type *</label>
+                  <select
+                    value={editingDish.is_veg ? 'true' : 'false'}
+                    onChange={(e) => setEditingDish({ ...editingDish, is_veg: e.target.value === 'true' })}
+                    style={styles.select}
+                  >
+                    <option value="true">🟢 Veg</option>
+                    <option value="false">🔴 Non-Veg</option>
+                  </select>
                 </div>
               </div>
-              <div className="flex items-start gap-2.5">
-                <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-white">Deliver to</p>
-                  <p className="text-gray-400 text-[11px]">{incomingOffer.deliveryAddress}</p>
-                </div>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                onClick={rejectOffer}
-                className="py-3 bg-zinc-800 hover:bg-zinc-700 text-gray-300 font-bold rounded-2xl text-xs transition"
-              >
-                Decline
-              </button>
-              <button
-                onClick={acceptOffer}
-                className="py-3 bg-[#00b259] hover:bg-[#00964b] text-white font-bold rounded-2xl text-xs shadow-lg shadow-[#00b259]/20 transition"
-              >
-                Accept Offer
-              </button>
-            </div>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Category</label>
+                <select
+                  value={editingDish.category || 'Main Course'}
+                  onChange={(e) => setEditingDish({ ...editingDish, category: e.target.value })}
+                  style={styles.select}
+                >
+                  <option value="Starters">Starters</option>
+                  <option value="Main Course">Main Course</option>
+                  <option value="Pizzas">Pizzas</option>
+                  <option value="Burgers">Burgers</option>
+                  <option value="Desserts">Desserts</option>
+                  <option value="Beverages">Beverages</option>
+                </select>
+              </div>
+
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Description</label>
+                <textarea
+                  rows="3"
+                  value={editingDish.description || ''}
+                  onChange={(e) => setEditingDish({ ...editingDish, description: e.target.value })}
+                  style={styles.textarea}
+                />
+              </div>
+
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Dish Image URL</label>
+                <input
+                  type="url"
+                  value={editingDish.image_url || ''}
+                  onChange={(e) => setEditingDish({ ...editingDish, image_url: e.target.value })}
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.modalActions}>
+                <button type="button" onClick={() => setEditingDish(null)} style={styles.cancelRestImgBtn}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={updatingDish} style={styles.saveRestImgBtn}>
+                  {updatingDish ? 'Saving...' : 'Update Dish'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-[#181818] border-t border-[#2a2a2a] flex justify-around p-3 z-30">
-        <button
-          onClick={() => setActiveTab('duty')}
-          className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
-            activeTab === 'duty' ? 'text-[#00b259]' : 'text-gray-500'
-          }`}
-        >
-          <Navigation className="w-5 h-5" />
-          <span>Duty</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
-            activeTab === 'profile' ? 'text-[#00b259]' : 'text-gray-500'
-          }`}
-        >
-          <User className="w-5 h-5" />
-          <span>Profile</span>
-        </button>
-      </nav>
     </div>
   );
 }
+
+// Helper for Status Badge Styling
+const getStatusBadgeStyle = (status) => {
+  switch (status.toLowerCase()) {
+    case 'pending':
+      return { backgroundColor: '#fef3c7', color: '#92400e' };
+    case 'preparing':
+      return { backgroundColor: '#e0f2fe', color: '#075985' };
+    case 'out for delivery':
+      return { backgroundColor: '#fae8ff', color: '#86198f' };
+    case 'delivered':
+      return { backgroundColor: '#dcfce7', color: '#166534' };
+    case 'cancelled':
+      return { backgroundColor: '#fee2e2', color: '#991b1b' };
+    default:
+      return { backgroundColor: '#f3f4f6', color: '#374151' };
+  }
+};
+
+const styles = {
+  dashboard: {
+    minHeight: '100vh',
+    backgroundColor: '#f8fafc',
+    fontFamily: 'Inter, system-ui, sans-serif'
+  },
+  topBar: {
+    backgroundColor: '#ffffff',
+    padding: '16px 32px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottom: '1px solid #e2e8f0',
+    flexWrap: 'wrap',
+    gap: '16px'
+  },
+  restaurantProfileHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px'
+  },
+  restImgWrapper: {
+    position: 'relative',
+    width: '48px',
+    height: '48px'
+  },
+  restHeaderImg: {
+    width: '48px',
+    height: '48px',
+    borderRadius: '10px',
+    objectFit: 'cover',
+    border: '1px solid #cbd5e1'
+  },
+  editRestImgBadge: {
+    position: 'absolute',
+    bottom: '-6px',
+    right: '-10px',
+    backgroundColor: '#0f172a',
+    color: '#ffffff',
+    border: 'none',
+    fontSize: '9px',
+    padding: '2px 5px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontWeight: '700'
+  },
+  brandTitle: {
+    margin: 0,
+    fontSize: '18px',
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  brandSubtitle: {
+    margin: 0,
+    fontSize: '12px',
+    color: '#64748b'
+  },
+  restImgModal: {
+    backgroundColor: '#f1f5f9',
+    padding: '12px 32px',
+    borderBottom: '1px solid #e2e8f0'
+  },
+  restImgForm: {
+    display: 'flex',
+    alignItems: 'flex-end',
+    gap: '12px',
+    maxWidth: '800px'
+  },
+  saveRestImgBtn: {
+    padding: '10px 16px',
+    backgroundColor: '#0284c7',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '6px',
+    fontWeight: '600',
+    fontSize: '13px',
+    cursor: 'pointer'
+  },
+  cancelRestImgBtn: {
+    padding: '10px 14px',
+    backgroundColor: '#ffffff',
+    color: '#64748b',
+    border: '1px solid #cbd5e1',
+    borderRadius: '6px',
+    fontWeight: '600',
+    fontSize: '13px',
+    cursor: 'pointer'
+  },
+  navTabs: {
+    display: 'flex',
+    gap: '8px',
+    backgroundColor: '#f1f5f9',
+    padding: '4px',
+    borderRadius: '8px'
+  },
+  tabBtn: {
+    padding: '8px 16px',
+    border: 'none',
+    backgroundColor: 'transparent',
+    borderRadius: '6px',
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#64748b',
+    cursor: 'pointer',
+    transition: 'all 0.2s'
+  },
+  activeTabBtn: {
+    backgroundColor: '#ffffff',
+    color: '#0f172a',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+  },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px'
+  },
+  addressTaskbarBtn: {
+    padding: '8px 12px',
+    border: '1px solid #0284c7',
+    backgroundColor: '#f0f9ff',
+    color: '#0369a1',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: '600',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    transition: 'all 0.2s ease'
+  },
+  addressTaskbarBtnSaved: {
+    border: '1px solid #cbd5e1',
+    backgroundColor: '#f8fafc',
+    color: '#334155'
+  },
+  liveBadge: {
+    fontSize: '13px',
+    color: '#16a34a',
+    fontWeight: '600',
+    backgroundColor: '#f0fdf4',
+    padding: '4px 10px',
+    borderRadius: '12px'
+  },
+  logoutBtn: {
+    padding: '8px 14px',
+    border: '1px solid #cbd5e1',
+    backgroundColor: '#ffffff',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#334155'
+  },
+  content: {
+    padding: '24px 32px'
+  },
+  filterBar: {
+    display: 'flex',
+    gap: '8px',
+    marginBottom: '24px',
+    overflowX: 'auto',
+    paddingBottom: '4px'
+  },
+  filterTab: {
+    padding: '8px 16px',
+    border: 'none',
+    backgroundColor: '#ffffff',
+    borderRadius: '20px',
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#64748b',
+    cursor: 'pointer',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+  },
+  activeFilterTab: {
+    backgroundColor: '#0f172a',
+    color: '#ffffff'
+  },
+  centeredMessage: {
+    textAlign: 'center',
+    padding: '60px',
+    color: '#64748b',
+    fontSize: '16px'
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+    gap: '20px'
+  },
+  orderCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: '10px',
+    border: '1px solid #e2e8f0',
+    padding: '20px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+  },
+  cardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start'
+  },
+  orderId: {
+    fontSize: '16px',
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  orderTime: {
+    fontSize: '12px',
+    color: '#94a3b8',
+    marginTop: '2px'
+  },
+  statusTag: {
+    padding: '4px 10px',
+    borderRadius: '12px',
+    fontSize: '12px',
+    fontWeight: '700'
+  },
+  addressBox: {
+    backgroundColor: '#f8fafc',
+    padding: '10px',
+    borderRadius: '6px',
+    fontSize: '13px'
+  },
+  addressText: {
+    margin: '4px 0 0 0',
+    color: '#475569'
+  },
+  itemsList: {
+    fontSize: '13px',
+    borderTop: '1px dashed #e2e8f0',
+    paddingTop: '10px'
+  },
+  itemsTitle: {
+    display: 'block',
+    marginBottom: '6px',
+    color: '#334155'
+  },
+  itemRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginBottom: '4px',
+    color: '#475569'
+  },
+  qtyText: {
+    color: '#e11d48'
+  },
+  cardFooter: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTop: '1px solid #e2e8f0',
+    paddingTop: '10px'
+  },
+  totalLabel: {
+    fontSize: '11px',
+    color: '#64748b',
+    textTransform: 'uppercase'
+  },
+  totalValue: {
+    fontSize: '18px',
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  paymentMethod: {
+    fontSize: '12px',
+    color: '#64748b',
+    backgroundColor: '#f1f5f9',
+    padding: '4px 8px',
+    borderRadius: '4px'
+  },
+  actionsBox: {
+    display: 'flex',
+    gap: '8px',
+    marginTop: '4px'
+  },
+  actionBtn: {
+    flex: 1,
+    padding: '10px',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '6px',
+    fontWeight: '600',
+    fontSize: '13px',
+    cursor: 'pointer'
+  },
+  cancelBtn: {
+    padding: '10px 14px',
+    backgroundColor: '#ffffff',
+    color: '#dc2626',
+    border: '1px solid #fca5a5',
+    borderRadius: '6px',
+    fontWeight: '600',
+    fontSize: '13px',
+    cursor: 'pointer'
+  },
+  menuLayout: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+    gap: '24px',
+    alignItems: 'start'
+  },
+  formContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    padding: '24px',
+    border: '1px solid #e2e8f0',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+  },
+  sectionHeader: {
+    margin: '0 0 16px 0',
+    fontSize: '18px',
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px'
+  },
+  inputGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px'
+  },
+  rowTwo: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '12px'
+  },
+  label: {
+    fontSize: '12px',
+    fontWeight: '700',
+    color: '#475569'
+  },
+  input: {
+    padding: '10px 12px',
+    borderRadius: '6px',
+    border: '1px solid #cbd5e1',
+    fontSize: '14px',
+    outline: 'none'
+  },
+  select: {
+    padding: '10px 12px',
+    borderRadius: '6px',
+    border: '1px solid #cbd5e1',
+    fontSize: '14px',
+    backgroundColor: '#ffffff',
+    outline: 'none',
+    cursor: 'pointer'
+  },
+  textarea: {
+    padding: '10px 12px',
+    borderRadius: '6px',
+    border: '1px solid #cbd5e1',
+    fontSize: '14px',
+    outline: 'none',
+    resize: 'vertical'
+  },
+  imagePreviewBox: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+  previewLabel: {
+    fontSize: '10px',
+    fontWeight: '700',
+    color: '#94a3b8',
+    textTransform: 'uppercase'
+  },
+  previewImg: {
+    width: '100%',
+    height: '120px',
+    objectFit: 'cover',
+    borderRadius: '6px',
+    border: '1px solid #e2e8f0'
+  },
+  submitBtn: {
+    padding: '12px',
+    backgroundColor: '#16a34a',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '6px',
+    fontWeight: '700',
+    fontSize: '14px',
+    cursor: 'pointer',
+    marginTop: '6px'
+  },
+  menuListContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    padding: '24px',
+    border: '1px solid #e2e8f0',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+  },
+  menuListHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '16px'
+  },
+  badgeCount: {
+    fontSize: '12px',
+    backgroundColor: '#f1f5f9',
+    padding: '4px 10px',
+    borderRadius: '12px',
+    color: '#475569',
+    fontWeight: '600'
+  },
+  emptyMenuBox: {
+    padding: '40px',
+    textAlign: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: '8px',
+    border: '1px dashed #cbd5e1'
+  },
+  dishListScroll: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+    maxHeight: '600px',
+    overflowY: 'auto',
+    paddingRight: '4px'
+  },
+  dishCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px',
+    backgroundColor: '#f8fafc',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0'
+  },
+  dishImg: {
+    width: '64px',
+    height: '64px',
+    borderRadius: '6px',
+    objectFit: 'cover',
+    flexShrink: 0
+  },
+  dishDetails: {
+    flex: 1,
+    minWidth: 0
+  },
+  dishHeaderRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px'
+  },
+  dishTitle: {
+    margin: 0,
+    fontSize: '14px',
+    fontWeight: '700',
+    color: '#0f172a',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
+  },
+  dishCategoryTag: {
+    fontSize: '11px',
+    color: '#64748b',
+    backgroundColor: '#e2e8f0',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    display: 'inline-block',
+    marginTop: '2px'
+  },
+  dishPrice: {
+    fontSize: '13px',
+    fontWeight: '700',
+    color: '#16a34a',
+    marginTop: '2px'
+  },
+  dishDescText: {
+    margin: '2px 0 0 0',
+    fontSize: '11px',
+    color: '#94a3b8',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
+  },
+  dishControlBtns: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center'
+  },
+  editDishBtn: {
+    padding: '6px 10px',
+    border: '1px solid #cbd5e1',
+    backgroundColor: '#ffffff',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#334155'
+  },
+  deleteDishBtn: {
+    padding: '6px 10px',
+    border: '1px solid #fee2e2',
+    backgroundColor: '#fef2f2',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '12px'
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+    padding: '16px'
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    padding: '24px',
+    width: '100%',
+    maxWidth: '500px',
+    boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px'
+  },
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottom: '1px solid #e2e8f0',
+    paddingBottom: '12px'
+  },
+  closeModalBtn: {
+    background: 'none',
+    border: 'none',
+    fontSize: '18px',
+    cursor: 'pointer',
+    color: '#64748b'
+  },
+  modalActions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '10px',
+    marginTop: '8px'
+  }
+};
