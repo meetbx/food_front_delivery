@@ -23,10 +23,10 @@ import { io } from 'socket.io-client';
 import { useRiderAuth } from '../../context/RiderAuthContext'; //
 
 const STEPS = {
-  ACCEPTED: { label: 'Arrived at Restaurant', next: 'ARRIVED_RESTAURANT', stepNum: 1 },
-  ARRIVED_RESTAURANT: { label: 'Confirm Picked Up', next: 'PICKED_UP', stepNum: 2 },
-  PICKED_UP: { label: 'Arrived at Customer', next: 'ARRIVED_CUSTOMER', stepNum: 3 },
-  ARRIVED_CUSTOMER: { label: 'Complete Delivery', next: 'DELIVERED', stepNum: 4 },
+  ACCEPTED: { label: 'Arrived at Restaurant', next: 'Arrived_At_Restaurant', stepNum: 1 },
+  Arrived_At_Restaurant: { label: 'Confirm Picked Up', next: 'Picked_Up', stepNum: 2 },
+  Picked_Up: { label: 'Arrived at Customer', next: 'Arrived_At_Customer', stepNum: 3 },
+  Arrived_At_Customer: { label: 'Complete Delivery', next: 'Delivered', stepNum: 4 },
 };
 
 const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-rwor.onrender.com';
@@ -273,7 +273,20 @@ const advanceStep = () => {
 
   const nextStatus = currentStepConfig.next;
 
-  if (nextStatus === 'DELIVERED') {
+  try {
+    // 1. Send DB update request to Express endpoint
+    const response = await fetch(`${SOCKET_URL}/api/orders/${activeDelivery.id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: nextStatus })
+    });
+
+    if (!response.ok) {
+      console.error('Database update failed');
+      return;
+    }
+
+  if (nextStatus === 'Delivered' || nextStatus === 'DELIVERED')) {
     const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
     
     socket.emit('register_rider', { riderId: profile.id, driverId: profile.id });
