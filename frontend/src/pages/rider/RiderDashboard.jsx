@@ -275,39 +275,31 @@ const advanceStep = async () => {
   }
 
   const nextStatus = currentStepConfig.next;
-  const driverId = profile.id;
 
   try {
-    // 1. Send DB update request to Express backend with rider ID context
+    // Send DB update request to Express backend
     const response = await fetch(`${SOCKET_URL}/api/orders/${activeDelivery.id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        status: nextStatus,
-        driverId: driverId,
-        riderId: driverId
-      })
+      body: JSON.stringify({ status: nextStatus })
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
-      console.error('Database HTTP update failed:', data.message);
-      alert(`Status Update Failed: ${data.message || 'Server Error'}`);
+      console.error('Database HTTP update failed');
       return;
     }
 
     console.log(`✅ Status updated in DB to: ${nextStatus}`);
 
-    // 2. Check if delivery is complete
+    // Check if delivery is complete
     if (nextStatus === 'Delivered' || nextStatus === 'DELIVERED') {
       const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
       
-      socket.emit('register_rider', { riderId: driverId, driverId: driverId });
+      socket.emit('register_rider', { riderId: profile.id, driverId: profile.id });
       socket.emit('complete_delivery', {
         orderId: activeDelivery.id,
-        riderId: driverId,
-        driverId: driverId
+        riderId: profile.id,
+        driverId: profile.id
       });
 
       const numericEarnings = parseFloat(String(activeDelivery.earnings).replace(/[^0-9.]/g, '')) || 65;
@@ -329,7 +321,7 @@ const advanceStep = async () => {
       setActiveDelivery(null);
       setTimeout(() => socket.disconnect(), 500);
     } else {
-      // 3. Update local state to advance UI button to next stage
+      // Update local state to advance UI button to next stage
       setActiveDelivery(prev => ({ ...prev, status: nextStatus }));
     }
   } catch (err) {
