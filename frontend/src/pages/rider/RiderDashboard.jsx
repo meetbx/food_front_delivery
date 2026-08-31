@@ -317,6 +317,9 @@ const advanceStep = () => {
   } else {
     setActiveDelivery(prev => ({ ...prev, status: nextStatus }));
   }
+    catch (err) {
+    console.error('Error in advanceStep database update:', err);
+  }
 };
 
   if (!isLoggedIn) {
