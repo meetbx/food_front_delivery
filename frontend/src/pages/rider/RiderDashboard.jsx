@@ -267,56 +267,42 @@ useEffect(() => {
   };
 
 const advanceStep = () => {
-  if (!activeDelivery) return;
+  if (!activeDelivery || !profile?.id) return;
   const currentStepConfig = STEPS[activeDelivery.status];
   if (!currentStepConfig) return;
 
   const nextStatus = currentStepConfig.next;
 
-  // Initialize socket connection to emit updates to backend
-  const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
-
   if (nextStatus === 'DELIVERED') {
-    // 1. Emit complete_delivery event to trigger backend socket handler (socket.js line 242)
+    const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
+    
+    socket.emit('register_rider', { riderId: profile.id, driverId: profile.id });
     socket.emit('complete_delivery', {
       orderId: activeDelivery.id,
       riderId: profile.id,
       driverId: profile.id
     });
 
-    // 2. Update local state upon successful completion confirmation
-    socket.once('delivery_completed_success', () => {
-      const numericEarnings = parseFloat(String(activeDelivery.earnings).replace(/[^0-9.]/g, '')) || 65;
-      
-      setEarnings(prev => ({
-        today: prev.today + numericEarnings,
-        week: prev.week + numericEarnings
-      }));
+    const numericEarnings = parseFloat(String(activeDelivery.earnings).replace(/[^0-9.]/g, '')) || 65;
+    setEarnings(prev => ({
+      today: prev.today + numericEarnings,
+      week: prev.week + numericEarnings
+    }));
 
-      setRecentHistory(prev => [
-        {
-          id: activeDelivery.id,
-          restaurant: activeDelivery.restaurant,
-          earnings: activeDelivery.earnings,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        },
-        ...prev
-      ]);
+    setRecentHistory(prev => [
+      {
+        id: activeDelivery.id,
+        restaurant: activeDelivery.restaurant,
+        earnings: activeDelivery.earnings,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      },
+      ...prev
+    ]);
 
-      setActiveDelivery(null);
-      socket.disconnect();
-    });
-  } else {
-    // 3. Emit real-time status change frame for intermediate steps (ARRIVED_RESTAURANT, PICKED_UP, etc.)
-    socket.emit('update_order_status', {
-      orderId: activeDelivery.id,
-      riderId: profile.id,
-      status: nextStatus
-    });
-
-    // Update local active status UI
-    setActiveDelivery(prev => ({ ...prev, status: nextStatus }));
+    setActiveDelivery(null);
     setTimeout(() => socket.disconnect(), 500);
+  } else {
+    setActiveDelivery(prev => ({ ...prev, status: nextStatus }));
   }
 };
 
