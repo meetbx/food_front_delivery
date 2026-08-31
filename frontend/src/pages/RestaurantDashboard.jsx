@@ -20,7 +20,7 @@ import {
   Bell
 } from 'lucide-react';
 import { io } from 'socket.io-client';
-import { useRiderAuth } from '../../context/RiderAuthContext'; //
+import { useRiderAuth } from '../../../context/RiderAuthContext'; //
 
 const STEPS = {
   ACCEPTED: { label: 'Arrived at Restaurant', next: 'ARRIVED_RESTAURANT', stepNum: 1 },
