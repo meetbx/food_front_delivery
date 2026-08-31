@@ -23,12 +23,11 @@ import { io } from 'socket.io-client';
 import { useRiderAuth } from '../../context/RiderAuthContext'; //
 
 const STEPS = {
-  ACCEPTED: { label: 'Arrived at Restaurant', next: 'Arrived_At_Restaurant', stepNum: 1 },
-  Arrived_At_Restaurant: { label: 'Confirm Picked Up', next: 'Picked_Up', stepNum: 2 },
-  Picked_Up: { label: 'Arrived at Customer', next: 'Arrived_At_Customer', stepNum: 3 },
-  Arrived_At_Customer: { label: 'Complete Delivery', next: 'Delivered', stepNum: 4 },
+  'ACCEPTED': { label: 'Arrived at Restaurant', next: 'Arrived_At_Restaurant', stepNum: 1 },
+  'Arrived_At_Restaurant': { label: 'Confirm Picked Up', next: 'Picked_Up', stepNum: 2 },
+  'Picked_Up': { label: 'Arrived at Customer', next: 'Arrived_At_Customer', stepNum: 3 },
+  'Arrived_At_Customer': { label: 'Complete Delivery', next: 'Delivered', stepNum: 4 },
 };
-
 const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-rwor.onrender.com';
 
 
@@ -266,15 +265,19 @@ useEffect(() => {
     setTimeout(() => socket.disconnect(), 500);
   };
 
-const advanceStep = () => {
+const advanceStep = async () => {
   if (!activeDelivery || !profile?.id) return;
+  
   const currentStepConfig = STEPS[activeDelivery.status];
-  if (!currentStepConfig) return;
+  if (!currentStepConfig) {
+    console.error(`[STEPS ERROR] No matching step for status: "${activeDelivery.status}"`);
+    return;
+  }
 
   const nextStatus = currentStepConfig.next;
 
   try {
-    // 1. Send DB update request to Express endpoint
+    // Send DB update request to Express backend
     const response = await fetch(`${SOCKET_URL}/api/orders/${activeDelivery.id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -282,43 +285,47 @@ const advanceStep = () => {
     });
 
     if (!response.ok) {
-      console.error('Database update failed');
+      console.error('Database HTTP update failed');
       return;
     }
 
-  if (nextStatus === 'Delivered' || nextStatus === 'DELIVERED')) {
-    const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
-    
-    socket.emit('register_rider', { riderId: profile.id, driverId: profile.id });
-    socket.emit('complete_delivery', {
-      orderId: activeDelivery.id,
-      riderId: profile.id,
-      driverId: profile.id
-    });
+    console.log(`✅ Status updated in DB to: ${nextStatus}`);
 
-    const numericEarnings = parseFloat(String(activeDelivery.earnings).replace(/[^0-9.]/g, '')) || 65;
-    setEarnings(prev => ({
-      today: prev.today + numericEarnings,
-      week: prev.week + numericEarnings
-    }));
+    // Check if delivery is complete
+    if (nextStatus === 'Delivered' || nextStatus === 'DELIVERED') {
+      const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
+      
+      socket.emit('register_rider', { riderId: profile.id, driverId: profile.id });
+      socket.emit('complete_delivery', {
+        orderId: activeDelivery.id,
+        riderId: profile.id,
+        driverId: profile.id
+      });
 
-    setRecentHistory(prev => [
-      {
-        id: activeDelivery.id,
-        restaurant: activeDelivery.restaurant,
-        earnings: activeDelivery.earnings,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      },
-      ...prev
-    ]);
+      const numericEarnings = parseFloat(String(activeDelivery.earnings).replace(/[^0-9.]/g, '')) || 65;
+      setEarnings(prev => ({
+        today: prev.today + numericEarnings,
+        week: prev.week + numericEarnings
+      }));
 
-    setActiveDelivery(null);
-    setTimeout(() => socket.disconnect(), 500);
-  } else {
-    setActiveDelivery(prev => ({ ...prev, status: nextStatus }));
-  }
-    catch (err) {
-    console.error('Error in advanceStep database update:', err);
+      setRecentHistory(prev => [
+        {
+          id: activeDelivery.id,
+          restaurant: activeDelivery.restaurant,
+          earnings: activeDelivery.earnings,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        },
+        ...prev
+      ]);
+
+      setActiveDelivery(null);
+      setTimeout(() => socket.disconnect(), 500);
+    } else {
+      // Update local state to advance UI button to next stage
+      setActiveDelivery(prev => ({ ...prev, status: nextStatus }));
+    }
+  } catch (err) {
+    console.error('Error in advanceStep:', err);
   }
 };
 
