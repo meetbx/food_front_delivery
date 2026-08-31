@@ -266,14 +266,28 @@ useEffect(() => {
     setTimeout(() => socket.disconnect(), 500);
   };
 
-  const advanceStep = () => {
-    if (!activeDelivery) return;
-    const currentStepConfig = STEPS[activeDelivery.status];
-    if (!currentStepConfig) return;
+const advanceStep = () => {
+  if (!activeDelivery) return;
+  const currentStepConfig = STEPS[activeDelivery.status];
+  if (!currentStepConfig) return;
 
-    const nextStatus = currentStepConfig.next;
-    if (nextStatus === 'DELIVERED') {
+  const nextStatus = currentStepConfig.next;
+
+  // Initialize socket connection to emit updates to backend
+  const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
+
+  if (nextStatus === 'DELIVERED') {
+    // 1. Emit complete_delivery event to trigger backend socket handler (socket.js line 242)
+    socket.emit('complete_delivery', {
+      orderId: activeDelivery.id,
+      riderId: profile.id,
+      driverId: profile.id
+    });
+
+    // 2. Update local state upon successful completion confirmation
+    socket.once('delivery_completed_success', () => {
       const numericEarnings = parseFloat(String(activeDelivery.earnings).replace(/[^0-9.]/g, '')) || 65;
+      
       setEarnings(prev => ({
         today: prev.today + numericEarnings,
         week: prev.week + numericEarnings
@@ -290,10 +304,21 @@ useEffect(() => {
       ]);
 
       setActiveDelivery(null);
-    } else {
-      setActiveDelivery(prev => ({ ...prev, status: nextStatus }));
-    }
-  };
+      socket.disconnect();
+    });
+  } else {
+    // 3. Emit real-time status change frame for intermediate steps (ARRIVED_RESTAURANT, PICKED_UP, etc.)
+    socket.emit('update_order_status', {
+      orderId: activeDelivery.id,
+      riderId: profile.id,
+      status: nextStatus
+    });
+
+    // Update local active status UI
+    setActiveDelivery(prev => ({ ...prev, status: nextStatus }));
+    setTimeout(() => socket.disconnect(), 500);
+  }
+};
 
   if (!isLoggedIn) {
     return (
