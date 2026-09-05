@@ -278,7 +278,6 @@ const advanceStep = async () => {
   const driverId = profile.id;
 
   try {
-    // 1. Send DB update request to Express backend with rider ID context
     const response = await fetch(`${SOCKET_URL}/api/orders/${activeDelivery.id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -299,7 +298,6 @@ const advanceStep = async () => {
 
     console.log(`✅ Status updated in DB to: ${nextStatus}`);
 
-    // 2. Check if delivery is complete
     if (nextStatus === 'Delivered' || nextStatus === 'DELIVERED') {
       const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
       
@@ -329,13 +327,13 @@ const advanceStep = async () => {
       setActiveDelivery(null);
       setTimeout(() => socket.disconnect(), 500);
     } else {
-      // 3. Update local state to advance UI button to next stage
       setActiveDelivery(prev => ({ ...prev, status: nextStatus }));
     }
   } catch (err) {
     console.error('Error in advanceStep:', err);
   }
 };
+  
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-[#121212] text-white flex flex-col items-center justify-center p-4">
