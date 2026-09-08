@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Wrapper, Status } from '@googlemaps/react-wrapper';
 import { 
   Navigation, 
   Phone, 
@@ -30,24 +31,164 @@ const STEPS = {
 };
 
 const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-rwor.onrender.com';
+const GOOGLE_MAPS_API_KEY = process.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyBtNMoXuYrWkz9dX-lOgQYwI9hkaFExurE';
 
-/**
- * Utility helper to launch Google Maps navigation in a new tab or mobile app
- */
-const openGoogleMaps = (lat, lng, address) => {
-  let mapUrl = '';
-  if (lat && lng) {
-    mapUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
-  } else if (address) {
-    mapUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
-  } else {
-    alert('Location details are missing for navigation.');
-    return;
-  }
-  window.open(mapUrl, '_blank');
+// --- EMBEDDED GOOGLE MAP COMPONENT ---
+function EmbeddedMap({ riderCoords, activeDelivery }) {
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markersRef = useRef([]);
+
+  // Geocode address strings if coordinates are not provided as floats
+  const geocodeAddress = (address, callback) => {
+    if (!window.google || !window.google.maps) return;
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode({ address }, (results, status) => {
+      if (status === 'OK' && results[0]) {
+        const location = results[0].geometry.location;
+        callback({ lat: location.lat(), lng: location.lng() });
+      } else {
+        console.warn(`[GEOCODE FAILED]: ${status}`);
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (!mapRef.current || !window.google) return;
+
+    // Initialize map once
+    if (!mapInstanceRef.current) {
+      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+        center: riderCoords || { lat: 28.6139, lng: 77.2090 },
+        zoom: 14,
+        disableDefaultUI: true,
+        zoomControl: true,
+        styles: [
+          { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
+          { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
+          { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+          {
+            featureType: 'road',
+            elementType: 'geometry',
+            stylers: [{ color: '#38414e' }]
+          },
+          {
+            featureType: 'road',
+            elementType: 'geometry.stroke',
+            stylers: [{ color: '#212a37' }]
+          },
+          {
+            featureType: 'road',
+            elementType: 'labels.text.fill',
+            stylers: [{ color: '#9ca5b3' }]
+          }
+        ]
+      });
+    }
+
+    const map = mapInstanceRef.current;
+
+    // Clear previous markers
+    markersRef.current.forEach(marker => marker.setMap(null));
+    markersRef.current = [];
+
+    const bounds = new window.google.maps.LatLngBounds();
+    let hasPoints = false;
+
+    // Add Rider Location Marker
+    if (riderCoords) {
+      const riderMarker = new window.google.maps.Marker({
+        position: riderCoords,
+        map,
+        title: 'Your Location',
+        icon: {
+          url: 'https://cdn-icons-png.flaticon.com/512/3063/3063822.png',
+          scaledSize: new window.google.maps.Size(36, 36)
+        }
+      });
+      markersRef.current.push(riderMarker);
+      bounds.extend(riderCoords);
+      hasPoints = true;
+    }
+
+    // Add Delivery Locations
+    if (activeDelivery) {
+      const isHeadingToCustomer = ['Picked_Up', 'Arrived_At_Customer'].includes(activeDelivery.status);
+
+      // Extract coordinates or geocode fallback
+      const restLat = parseFloat(activeDelivery.restaurant_latitude || activeDelivery.restaurantLat);
+      const restLng = parseFloat(activeDelivery.restaurant_longitude || activeDelivery.restaurantLng);
+
+      const custLat = parseFloat(activeDelivery.delivery_latitude || activeDelivery.customerLat);
+      const custLng = parseFloat(activeDelivery.delivery_longitude || activeDelivery.customerLng);
+
+      const renderMarkers = (restPos, custPos) => {
+        if (restPos) {
+          const restMarker = new window.google.maps.Marker({
+            position: restPos,
+            map,
+            title: 'Restaurant',
+            icon: {
+              url: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+              scaledSize: new window.google.maps.Size(36, 36)
+            }
+          });
+          markersRef.current.push(restMarker);
+          if (!isHeadingToCustomer) bounds.extend(restPos);
+        }
+
+        if (custPos) {
+          const custMarker = new window.google.maps.Marker({
+            position: custPos,
+            map,
+            title: 'Customer Destination',
+            icon: {
+              url: 'https://cdn-icons-png.flaticon.com/512/1216/1216895.png',
+              scaledSize: new window.google.maps.Size(36, 36)
+            }
+          });
+          markersRef.current.push(custMarker);
+          if (isHeadingToCustomer) bounds.extend(custPos);
+        }
+
+        if (hasPoints) {
+          map.fitBounds(bounds);
+        }
+      };
+
+      if (restLat && restLng && custLat && custLng) {
+        renderMarkers({ lat: restLat, lng: restLng }, { lat: custLat, lng: custLng });
+      } else {
+        // Geocode addresses if coordinates are missing
+        if (activeDelivery.restaurantAddress) {
+          geocodeAddress(activeDelivery.restaurantAddress, (restPos) => {
+            if (activeDelivery.deliveryAddress) {
+              geocodeAddress(activeDelivery.deliveryAddress, (custPos) => {
+                renderMarkers(restPos, custPos);
+              });
+            } else {
+              renderMarkers(restPos, null);
+            }
+          });
+        }
+      }
+    } else if (hasPoints) {
+      map.setCenter(riderCoords);
+      map.setZoom(15);
+    }
+  }, [riderCoords, activeDelivery]);
+
+  return <div ref={mapRef} className="w-full h-full min-h-[260px] rounded-2xl" />;
+}
+
+const renderMapStatus = (status) => {
+  if (status === Status.LOADING) return <div className="p-4 text-xs text-gray-400 text-center">Loading Navigation Map...</div>;
+  if (status === Status.FAILURE) return <div className="p-4 text-xs text-red-400 text-center">Failed to load Google Maps. Please check your API key.</div>;
+  return null;
 };
 
 export default function RiderDashboard() {
+
   const { rider } = useRiderAuth();
   const activeRider = rider || JSON.parse(localStorage.getItem('rider_user') || '{}');
 
@@ -68,6 +209,7 @@ export default function RiderDashboard() {
   const [isOnline, setIsOnline] = useState(true);
   const [incomingOffer, setIncomingOffer] = useState(null);
   const [activeDelivery, setActiveDelivery] = useState(null);
+  const [riderCoords, setRiderCoords] = useState(null);
   const [earnings, setEarnings] = useState({ today: 142.50, week: 680.00 });
   const [activeTab, setActiveTab] = useState('duty');
   const [recentHistory, setRecentHistory] = useState([
@@ -85,11 +227,7 @@ export default function RiderDashboard() {
       id: rawOrder.id || rawOrder.order_id || 'ORD-NEW',
       restaurant: rawOrder.restaurant || rawOrder.restaurant_name || 'Restaurant',
       restaurantAddress: rawOrder.restaurantAddress || rawOrder.restaurant_address || 'Nearby Location',
-      restaurantLat: rawOrder.restaurant_lat || rawOrder.restaurantLat || rawOrder.restaurant?.latitude,
-      restaurantLng: rawOrder.restaurant_lng || rawOrder.restaurantLng || rawOrder.restaurant?.longitude,
       deliveryAddress: rawOrder.deliveryAddress || rawOrder.delivery_address || rawOrder.address || 'Customer Location',
-      deliveryLat: rawOrder.delivery_lat || rawOrder.deliveryLat || rawOrder.customer?.latitude,
-      deliveryLng: rawOrder.delivery_lng || rawOrder.deliveryLng || rawOrder.customer?.longitude,
       earnings: rawOrder.earnings || (rawOrder.total_amount ? `₹${rawOrder.total_amount}` : '₹85.00'),
       pickupDistance: rawOrder.pickupDistance || '1.2 km',
       dropDistance: rawOrder.dropDistance || '3.5 km',
@@ -127,7 +265,7 @@ export default function RiderDashboard() {
       }));
     }
   }, [activeRider]);
-
+  
   useEffect(() => {
     const savedRider = JSON.parse(localStorage.getItem('rider_user') || '{}');
     const driverId = profile?.id || savedRider.id || localStorage.getItem('driver_id');
@@ -164,10 +302,12 @@ export default function RiderDashboard() {
     if ('geolocation' in navigator) {
       watchId = navigator.geolocation.watchPosition(
         (position) => {
-          latestPosition = {
+          const coords = {
             lat: position.coords.latitude,
             lng: position.coords.longitude
           };
+          latestPosition = coords;
+          setRiderCoords(coords);
         },
         (error) => console.warn('[GEOLOCATION ERROR]:', error.message),
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 }
@@ -275,15 +415,6 @@ export default function RiderDashboard() {
         console.error('Database HTTP update failed:', data.message);
         alert(`Status Update Failed: ${data.message || 'Server Error'}`);
         return;
-      }
-
-      // Auto-launch Google Maps to customer upon picking up order
-      if (nextStatus === 'Picked_Up') {
-        openGoogleMaps(
-          activeDelivery.deliveryLat,
-          activeDelivery.deliveryLng,
-          activeDelivery.deliveryAddress
-        );
       }
 
       if (nextStatus === 'Delivered' || nextStatus === 'DELIVERED') {
@@ -469,6 +600,23 @@ export default function RiderDashboard() {
               </div>
             </div>
 
+            {/* Live Navigation Map Section */}
+            <div className="bg-[#1e1e1e] border border-[#2a2a2a] p-2 rounded-3xl overflow-hidden shadow-lg">
+              <div className="px-3 py-2 flex justify-between items-center border-b border-[#282828] mb-2">
+                <span className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-[#00b259]" /> Live Navigation Map
+                </span>
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  {activeDelivery ? 'Active Route' : 'GPS Tracking'}
+                </span>
+              </div>
+              <div className="h-64 w-full rounded-2xl overflow-hidden">
+                <Wrapper apiKey={GOOGLE_MAPS_API_KEY} render={renderMapStatus}>
+                  <EmbeddedMap riderCoords={riderCoords} activeDelivery={activeDelivery} />
+                </Wrapper>
+              </div>
+            </div>
+
             {/* Offline Notice */}
             {!isOnline && (
               <div className="bg-[#1e1e1e] border border-[#2a2a2a] p-6 rounded-3xl text-center space-y-2">
@@ -492,38 +640,20 @@ export default function RiderDashboard() {
                 </div>
 
                 <div className="space-y-3 text-xs">
-                  {/* Restaurant Pickup Info & Navigation Button */}
-                  <div className="flex justify-between items-start gap-2 bg-[#141414] p-3 rounded-2xl">
-                    <div className="flex items-start gap-2.5">
-                      <Store className="w-4 h-4 text-[#00b259] shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-bold text-white text-sm">{activeDelivery.restaurant}</p>
-                        <p className="text-gray-400 text-[11px]">{activeDelivery.restaurantAddress}</p>
-                      </div>
+                  <div className="flex items-start gap-3">
+                    <Store className="w-4 h-4 text-[#00b259] shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-white text-sm">{activeDelivery.restaurant}</p>
+                      <p className="text-gray-400 text-[11px]">{activeDelivery.restaurantAddress}</p>
                     </div>
-                    <button
-                      onClick={() => openGoogleMaps(activeDelivery.restaurantLat, activeDelivery.restaurantLng, activeDelivery.restaurantAddress)}
-                      className="px-2.5 py-1.5 bg-[#00b259]/20 hover:bg-[#00b259]/30 text-[#00b259] rounded-xl border border-[#00b259]/40 font-bold text-[11px] flex items-center gap-1 shrink-0"
-                    >
-                      <Navigation className="w-3 h-3" /> Maps
-                    </button>
                   </div>
 
-                  {/* Customer Drop-off Info & Navigation Button */}
-                  <div className="flex justify-between items-start gap-2 bg-[#141414] p-3 rounded-2xl">
-                    <div className="flex items-start gap-2.5">
-                      <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-bold text-white text-sm">Delivery Destination</p>
-                        <p className="text-gray-400 text-[11px]">{activeDelivery.deliveryAddress}</p>
-                      </div>
+                  <div className="flex items-start gap-3">
+                    <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-white text-sm">Delivery Destination</p>
+                      <p className="text-gray-400 text-[11px]">{activeDelivery.deliveryAddress}</p>
                     </div>
-                    <button
-                      onClick={() => openGoogleMaps(activeDelivery.deliveryLat, activeDelivery.deliveryLng, activeDelivery.deliveryAddress)}
-                      className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-xl border border-emerald-500/40 font-bold text-[11px] flex items-center gap-1 shrink-0"
-                    >
-                      <Navigation className="w-3 h-3" /> Maps
-                    </button>
                   </div>
                 </div>
 
