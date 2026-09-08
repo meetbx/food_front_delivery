@@ -20,7 +20,7 @@ import {
   Bell
 } from 'lucide-react';
 import { io } from 'socket.io-client';
-import { useRiderAuth } from '../../context/RiderAuthContext'; //
+import { useRiderAuth } from '../../context/RiderAuthContext';
 
 const STEPS = {
   'ACCEPTED': { label: 'Arrived at Restaurant', next: 'Arrived_At_Restaurant', stepNum: 1 },
@@ -28,18 +28,32 @@ const STEPS = {
   'Picked_Up': { label: 'Arrived at Customer', next: 'Arrived_At_Customer', stepNum: 3 },
   'Arrived_At_Customer': { label: 'Complete Delivery', next: 'Delivered', stepNum: 4 },
 };
+
 const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-rwor.onrender.com';
 
+/**
+ * Utility helper to launch Google Maps navigation in a new tab or mobile app
+ */
+const openGoogleMaps = (lat, lng, address) => {
+  let mapUrl = '';
+  if (lat && lng) {
+    mapUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+  } else if (address) {
+    mapUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
+  } else {
+    alert('Location details are missing for navigation.');
+    return;
+  }
+  window.open(mapUrl, '_blank');
+};
 
 export default function RiderDashboard() {
-
   const { rider } = useRiderAuth();
   const activeRider = rider || JSON.parse(localStorage.getItem('rider_user') || '{}');
 
-  
   const [isLoggedIn, setIsLoggedIn] = useState(true);
-const [profile, setProfile] = useState({
-    id: activeRider.id || null, // ✅ Dynamically uses logged-in rider ID
+  const [profile, setProfile] = useState({
+    id: activeRider.id || null,
     name: activeRider.name || 'Rider Partner',
     phone: activeRider.phone || '',
     rating: '4.90',
@@ -61,7 +75,6 @@ const [profile, setProfile] = useState({
     { id: 'ORD-9884', restaurant: 'Pizza Hut', earnings: '₹120', time: '11:15 AM' }
   ]);
 
-  // Helper to structure and set incoming offers cleanly
   const handleNewOffer = (data) => {
     console.log('[RIDER DASHBOARD] Received offer payload:', data);
     
@@ -72,7 +85,11 @@ const [profile, setProfile] = useState({
       id: rawOrder.id || rawOrder.order_id || 'ORD-NEW',
       restaurant: rawOrder.restaurant || rawOrder.restaurant_name || 'Restaurant',
       restaurantAddress: rawOrder.restaurantAddress || rawOrder.restaurant_address || 'Nearby Location',
+      restaurantLat: rawOrder.restaurant_lat || rawOrder.restaurantLat || rawOrder.restaurant?.latitude,
+      restaurantLng: rawOrder.restaurant_lng || rawOrder.restaurantLng || rawOrder.restaurant?.longitude,
       deliveryAddress: rawOrder.deliveryAddress || rawOrder.delivery_address || rawOrder.address || 'Customer Location',
+      deliveryLat: rawOrder.delivery_lat || rawOrder.deliveryLat || rawOrder.customer?.latitude,
+      deliveryLng: rawOrder.delivery_lng || rawOrder.deliveryLng || rawOrder.customer?.longitude,
       earnings: rawOrder.earnings || (rawOrder.total_amount ? `₹${rawOrder.total_amount}` : '₹85.00'),
       pickupDistance: rawOrder.pickupDistance || '1.2 km',
       dropDistance: rawOrder.dropDistance || '3.5 km',
@@ -81,58 +98,25 @@ const [profile, setProfile] = useState({
 
     setIncomingOffer(normalizedOffer);
   };
-const handleLogin = async (e) => {
-  e.preventDefault();
-  // Inside handleLogin
-localStorage.setItem('rider_token', userToken);
-localStorage.setItem('rider_user', JSON.stringify(loggedInRider));
-localStorage.setItem('driver_id', loggedInRider.id); // Save driver_id explicitly
 
-  try {
-    const response = await fetch('https://food-delivery-rwor.onrender.com/api/rider/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, password }),
-    });
+  const fetchPendingOffers = (lat = null, lng = null) => {
+    if (!profile?.id) return;
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      // ❌ Do NOT reference 'rider' here
-      throw new Error(data.message || 'Login failed');
+    let url = `${SOCKET_URL}/api/orders/pending-offers?driverId=${profile.id}`;
+    if (lat && lng) {
+      url += `&lat=${lat}&lng=${lng}`;
     }
 
-    // ✅ Declare local variables AFTER the fetch succeeds
-    const loggedInRider = data.rider;
-    const userToken = data.token;
+    fetch(url)
+      .then((res) => res.ok ? res.json() : null)
+      .then((result) => {
+        if (result?.data) {
+          handleNewOffer(result.data);
+        }
+      })
+      .catch((err) => console.warn('[PENDING OFFERS API WARNING]:', err.message));
+  };
 
-    // Save session and redirect
-    localStorage.setItem('rider_token', userToken);
-    localStorage.setItem('rider_user', JSON.stringify(loggedInRider));
-
-  } catch (err) {
-    console.error('Login Error:', err.message);
-  }
-};
-  // Fallback REST check to catch offers missed during socket drops
-const fetchPendingOffers = (lat = null, lng = null) => {
-  if (!profile?.id) return;
-
-  let url = `${SOCKET_URL}/api/orders/pending-offers?driverId=${profile.id}`;
-  if (lat && lng) {
-    url += `&lat=${lat}&lng=${lng}`;
-  }
-
-  fetch(url)
-    .then((res) => res.ok ? res.json() : null)
-    .then((result) => {
-      if (result?.data) {
-        handleNewOffer(result.data);
-      }
-    })
-    .catch((err) => console.warn('[PENDING OFFERS API WARNING]:', err.message));
-};
-// Sync profile when auth state updates
   useEffect(() => {
     if (activeRider?.id) {
       setProfile((prev) => ({
@@ -143,76 +127,73 @@ const fetchPendingOffers = (lat = null, lng = null) => {
       }));
     }
   }, [activeRider]);
-  
-useEffect(() => {
-  const savedRider = JSON.parse(localStorage.getItem('rider_user') || '{}');
-  const driverId = profile?.id || savedRider.id || localStorage.getItem('driver_id');
-  if (!isOnline || !driverId) return;
 
-  const socket = io(SOCKET_URL, {
-    transports: ['websocket', 'polling'],
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1000
-  });
+  useEffect(() => {
+    const savedRider = JSON.parse(localStorage.getItem('rider_user') || '{}');
+    const driverId = profile?.id || savedRider.id || localStorage.getItem('driver_id');
+    if (!isOnline || !driverId) return;
 
-  let latestPosition = null;
-  let locationInterval = null;
-  let watchId = null;
-
-  const registerDriver = () => {
-    socket.emit('register_rider', { riderId: driverId, driverId });
-    fetchPendingOffers();
-  };
-
-  const handleOrderTaken = ({ orderId }) => {
-    setIncomingOffer(prev => {
-      if (prev && String(prev.id) === String(orderId)) return null;
-      return prev;
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000
     });
-  };
 
-  socket.on('connect', registerDriver);
-  socket.on('new_order_offer', handleNewOffer);
-  socket.on('new_delivery_assignment', handleNewOffer);
-  socket.on('order_taken', handleOrderTaken);
+    let latestPosition = null;
+    let locationInterval = null;
+    let watchId = null;
 
-  // GPS is sampled continuously, but the server receives one authoritative
-  // location update every 3 seconds.
-  if ('geolocation' in navigator) {
-    watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        latestPosition = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        };
-      },
-      (error) => console.warn('[GEOLOCATION ERROR]:', error.message),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 }
-    );
+    const registerDriver = () => {
+      socket.emit('register_rider', { riderId: driverId, driverId });
+      fetchPendingOffers();
+    };
 
-    locationInterval = setInterval(() => {
-      if (!latestPosition || !socket.connected) return;
-      socket.emit('send_rider_location', {
-        riderId: driverId,
-        driverId,
-        lat: latestPosition.lat,
-        lng: latestPosition.lng
+    const handleOrderTaken = ({ orderId }) => {
+      setIncomingOffer(prev => {
+        if (prev && String(prev.id) === String(orderId)) return null;
+        return prev;
       });
-      console.log(`[GPS 3s] rider=${driverId} lat=${latestPosition.lat} lng=${latestPosition.lng}`);
-    }, 3000);
-  }
+    };
 
-  return () => {
-    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-    if (locationInterval) clearInterval(locationInterval);
-    socket.off('connect', registerDriver);
-    socket.off('new_order_offer', handleNewOffer);
-    socket.off('new_delivery_assignment', handleNewOffer);
-    socket.off('order_taken', handleOrderTaken);
-    socket.disconnect();
-  };
-}, [isOnline, profile?.id]); // Safely depend on profile?.id
+    socket.on('connect', registerDriver);
+    socket.on('new_order_offer', handleNewOffer);
+    socket.on('new_delivery_assignment', handleNewOffer);
+    socket.on('order_taken', handleOrderTaken);
+
+    if ('geolocation' in navigator) {
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          latestPosition = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+        },
+        (error) => console.warn('[GEOLOCATION ERROR]:', error.message),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 }
+      );
+
+      locationInterval = setInterval(() => {
+        if (!latestPosition || !socket.connected) return;
+        socket.emit('send_rider_location', {
+          riderId: driverId,
+          driverId,
+          lat: latestPosition.lat,
+          lng: latestPosition.lng
+        });
+      }, 3000);
+    }
+
+    return () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      if (locationInterval) clearInterval(locationInterval);
+      socket.off('connect', registerDriver);
+      socket.off('new_order_offer', handleNewOffer);
+      socket.off('new_delivery_assignment', handleNewOffer);
+      socket.off('order_taken', handleOrderTaken);
+      socket.disconnect();
+    };
+  }, [isOnline, profile?.id]);
 
   const handleProfileSave = () => {
     setProfile(editForm);
@@ -265,75 +246,82 @@ useEffect(() => {
     setTimeout(() => socket.disconnect(), 500);
   };
 
-const advanceStep = async () => {
-  if (!activeDelivery || !profile?.id) return;
-  
-  const currentStepConfig = STEPS[activeDelivery.status];
-  if (!currentStepConfig) {
-    console.error(`[STEPS ERROR] No matching step for status: "${activeDelivery.status}"`);
-    return;
-  }
-
-  const nextStatus = currentStepConfig.next;
-  const driverId = profile.id;
-
-  try {
-    const response = await fetch(`${SOCKET_URL}/api/orders/${activeDelivery.id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        status: nextStatus,
-        driverId: driverId,
-        riderId: driverId
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('Database HTTP update failed:', data.message);
-      alert(`Status Update Failed: ${data.message || 'Server Error'}`);
+  const advanceStep = async () => {
+    if (!activeDelivery || !profile?.id) return;
+    
+    const currentStepConfig = STEPS[activeDelivery.status];
+    if (!currentStepConfig) {
+      console.error(`[STEPS ERROR] No matching step for status: "${activeDelivery.status}"`);
       return;
     }
 
-    console.log(`✅ Status updated in DB to: ${nextStatus}`);
+    const nextStatus = currentStepConfig.next;
+    const driverId = profile.id;
 
-    if (nextStatus === 'Delivered' || nextStatus === 'DELIVERED') {
-      const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
-      
-      socket.emit('register_rider', { riderId: driverId, driverId: driverId });
-      socket.emit('complete_delivery', {
-        orderId: activeDelivery.id,
-        riderId: driverId,
-        driverId: driverId
+    try {
+      const response = await fetch(`${SOCKET_URL}/api/orders/${activeDelivery.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          status: nextStatus,
+          driverId: driverId,
+          riderId: driverId
+        })
       });
 
-      const numericEarnings = parseFloat(String(activeDelivery.earnings).replace(/[^0-9.]/g, '')) || 65;
-      setEarnings(prev => ({
-        today: prev.today + numericEarnings,
-        week: prev.week + numericEarnings
-      }));
+      const data = await response.json();
 
-      setRecentHistory(prev => [
-        {
-          id: activeDelivery.id,
-          restaurant: activeDelivery.restaurant,
-          earnings: activeDelivery.earnings,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        },
-        ...prev
-      ]);
+      if (!response.ok) {
+        console.error('Database HTTP update failed:', data.message);
+        alert(`Status Update Failed: ${data.message || 'Server Error'}`);
+        return;
+      }
 
-      setActiveDelivery(null);
-      setTimeout(() => socket.disconnect(), 500);
-    } else {
-      setActiveDelivery(prev => ({ ...prev, status: nextStatus }));
+      // Auto-launch Google Maps to customer upon picking up order
+      if (nextStatus === 'Picked_Up') {
+        openGoogleMaps(
+          activeDelivery.deliveryLat,
+          activeDelivery.deliveryLng,
+          activeDelivery.deliveryAddress
+        );
+      }
+
+      if (nextStatus === 'Delivered' || nextStatus === 'DELIVERED') {
+        const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
+        
+        socket.emit('register_rider', { riderId: driverId, driverId: driverId });
+        socket.emit('complete_delivery', {
+          orderId: activeDelivery.id,
+          riderId: driverId,
+          driverId: driverId
+        });
+
+        const numericEarnings = parseFloat(String(activeDelivery.earnings).replace(/[^0-9.]/g, '')) || 65;
+        setEarnings(prev => ({
+          today: prev.today + numericEarnings,
+          week: prev.week + numericEarnings
+        }));
+
+        setRecentHistory(prev => [
+          {
+            id: activeDelivery.id,
+            restaurant: activeDelivery.restaurant,
+            earnings: activeDelivery.earnings,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          },
+          ...prev
+        ]);
+
+        setActiveDelivery(null);
+        setTimeout(() => socket.disconnect(), 500);
+      } else {
+        setActiveDelivery(prev => ({ ...prev, status: nextStatus }));
+      }
+    } catch (err) {
+      console.error('Error in advanceStep:', err);
     }
-  } catch (err) {
-    console.error('Error in advanceStep:', err);
-  }
-};
-  
+  };
+
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-[#121212] text-white flex flex-col items-center justify-center p-4">
@@ -504,20 +492,38 @@ const advanceStep = async () => {
                 </div>
 
                 <div className="space-y-3 text-xs">
-                  <div className="flex items-start gap-3">
-                    <Store className="w-4 h-4 text-[#00b259] shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-white text-sm">{activeDelivery.restaurant}</p>
-                      <p className="text-gray-400 text-[11px]">{activeDelivery.restaurantAddress}</p>
+                  {/* Restaurant Pickup Info & Navigation Button */}
+                  <div className="flex justify-between items-start gap-2 bg-[#141414] p-3 rounded-2xl">
+                    <div className="flex items-start gap-2.5">
+                      <Store className="w-4 h-4 text-[#00b259] shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-white text-sm">{activeDelivery.restaurant}</p>
+                        <p className="text-gray-400 text-[11px]">{activeDelivery.restaurantAddress}</p>
+                      </div>
                     </div>
+                    <button
+                      onClick={() => openGoogleMaps(activeDelivery.restaurantLat, activeDelivery.restaurantLng, activeDelivery.restaurantAddress)}
+                      className="px-2.5 py-1.5 bg-[#00b259]/20 hover:bg-[#00b259]/30 text-[#00b259] rounded-xl border border-[#00b259]/40 font-bold text-[11px] flex items-center gap-1 shrink-0"
+                    >
+                      <Navigation className="w-3 h-3" /> Maps
+                    </button>
                   </div>
 
-                  <div className="flex items-start gap-3">
-                    <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-white text-sm">Delivery Destination</p>
-                      <p className="text-gray-400 text-[11px]">{activeDelivery.deliveryAddress}</p>
+                  {/* Customer Drop-off Info & Navigation Button */}
+                  <div className="flex justify-between items-start gap-2 bg-[#141414] p-3 rounded-2xl">
+                    <div className="flex items-start gap-2.5">
+                      <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-white text-sm">Delivery Destination</p>
+                        <p className="text-gray-400 text-[11px]">{activeDelivery.deliveryAddress}</p>
+                      </div>
                     </div>
+                    <button
+                      onClick={() => openGoogleMaps(activeDelivery.deliveryLat, activeDelivery.deliveryLng, activeDelivery.deliveryAddress)}
+                      className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-xl border border-emerald-500/40 font-bold text-[11px] flex items-center gap-1 shrink-0"
+                    >
+                      <Navigation className="w-3 h-3" /> Maps
+                    </button>
                   </div>
                 </div>
 
