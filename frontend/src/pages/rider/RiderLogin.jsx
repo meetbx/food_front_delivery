@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-rwor.onrender.com';
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-lc9n.onrender.com';
 
 export default function RiderLogin() {
   const [phone, setPhone] = useState('');
