@@ -30,7 +30,7 @@ const STEPS = {
   'Arrived_At_Customer': { label: 'Complete Delivery', next: 'Delivered', stepNum: 4 },
 };
 
-const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-rwor.onrender.com';
+const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 'https://food-delivery-lc9n.onrender.com';
 const GOOGLE_MAPS_API_KEY = process.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyBtNMoXuYrWkz9dX-lOgQYwI9hkaFExurE';
 
 // --- EMBEDDED GOOGLE MAP COMPONENT ---
